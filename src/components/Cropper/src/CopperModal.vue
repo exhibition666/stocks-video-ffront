@@ -176,7 +176,14 @@ async function handleOk() {
   emit('uploadSuccess', { source: previewSource.value, data: blob, filename: filename })
 }
 
-function openModal() {
+function openModal(signedUrl?: string) {
+  if (signedUrl) {
+    // 如果有传入签名URL，则使用它
+    src.value = signedUrl
+  } else if (props.srcValue) {
+    // 否则使用默认的srcValue
+    src.value = props.srcValue
+  }
   dialogVisible.value = true
 }
 

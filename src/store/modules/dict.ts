@@ -40,6 +40,12 @@ export const useDictStore = defineStore('dict', {
   },
   actions: {
     async setDictMap() {
+      // 判断当前是否后台页面（如路径包含 /system/ 或 /admin 等）
+      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/stocks-front')) {
+        // 前台页面不加载字典数据
+        this.isSetDict = true
+        return
+      }
       const dictMap = wsCache.get(CACHE_KEY.DICT_CACHE)
       if (dictMap) {
         this.dictMap = dictMap

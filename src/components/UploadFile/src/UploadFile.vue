@@ -8,7 +8,7 @@
       :before-upload="beforeUpload"
       :disabled="disabled"
       :drag="drag"
-      :http-request="httpRequest"
+      :http-request="uploadHandler"
       :limit="props.limit"
       :multiple="props.limit > 1"
       :on-error="excelUploadError"
@@ -16,9 +16,9 @@
       :on-preview="handlePreview"
       :on-remove="handleRemove"
       :on-success="handleFileSuccess"
-      :show-file-list="true"
       class="upload-file-uploader"
       name="file"
+      :show-file-list="props.showFileList"
     >
       <el-button type="primary">
         <Icon icon="ep:upload-filled" />
@@ -87,7 +87,9 @@ const props = defineProps({
   drag: propTypes.bool.def(false), // 拖拽上传
   isShowTip: propTypes.bool.def(true), // 是否显示提示
   disabled: propTypes.bool.def(false), // 是否禁用上传组件 ==> 非必传（默认为 false）
-  directory: propTypes.string.def(undefined) // 上传目录 ==> 非必传（默认为 undefined）
+  directory: propTypes.string.def(undefined), // 上传目录 ==> 非必传（默认为 undefined）
+  httpRequest: Function, // 新增：外部自定义上传方法
+  showFileList: { type: Boolean, default: true } // 新增，控制文件列表显示
 })
 
 // ========== 上传相关 ==========
@@ -97,6 +99,9 @@ const fileList = ref<UploadUserFile[]>([])
 const uploadNumber = ref<number>(0)
 
 const { uploadUrl, httpRequest } = useUpload(props.directory)
+
+// 上传方法选择：优先用外部传入的 httpRequest，否则用默认 useUpload
+const uploadHandler = computed(() => props.httpRequest || httpRequest)
 
 // 文件上传之前判断
 const beforeUpload: UploadProps['beforeUpload'] = (file: UploadRawFile) => {

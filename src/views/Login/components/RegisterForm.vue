@@ -97,7 +97,7 @@
   </el-form>
 </template>
 <script lang="ts" setup>
-import { ElLoading } from 'element-plus'
+import { ElLoading, ElMessage } from 'element-plus'
 import LoginFormTitle from './LoginFormTitle.vue'
 import type { RouteLocationNormalizedLoaded } from 'vue-router'
 import { useIcon } from '@/hooks/web/useIcon'
@@ -172,7 +172,7 @@ const registerData = reactive({
 
 // 提交注册
 const handleRegister = async (params: any) => {
-  loading.value = true
+  loginLoading.value = true
   try {
     if (registerData.tenantEnable) {
       await getTenantId()
@@ -187,6 +187,20 @@ const handleRegister = async (params: any) => {
     if (!res) {
       return
     }
+    
+    // 显示注册成功提示
+    ElMessage.success('注册成功，请登录')
+    
+    // 重置表单
+    registerData.registerForm.username = ''
+    registerData.registerForm.password = ''
+    registerData.registerForm.confirmPassword = ''
+    registerData.registerForm.nickname = ''
+    
+    // 切换到登录界面
+    handleBackLogin()
+    
+    /* 注释掉自动登录的逻辑
     loading.value = ElLoading.service({
       lock: true,
       text: '正在加载系统中...',
@@ -205,9 +219,12 @@ const handleRegister = async (params: any) => {
     } else {
       push({ path: redirect.value || permissionStore.addRouters[0].path })
     }
+    */
   } finally {
     loginLoading.value = false
-    loading.value.close()
+    if (loading.value) {
+      loading.value.close()
+    }
   }
 }
 

@@ -34,6 +34,14 @@ let isRefreshToken = false
 // 请求白名单，无须 token 的接口
 const whiteList: string[] = ['/login', '/refresh-token']
 
+// 需要跳过自动刷新Token的接口白名单
+const noRefreshTokenApi = [
+  '/app-api/member/auth/send-sms-code',
+  '/app-api/member/auth/sms-login',
+  '/app-api/member/auth/login'
+  // 可根据实际情况继续补充
+];
+
 // 创建axios实例
 const service: AxiosInstance = axios.create({
   baseURL: base_url, // api 的 base_url
@@ -55,7 +63,12 @@ service.interceptors.request.use(
         return (isToken = false)
       }
     })
-    if (getAccessToken() && !isToken) {
+    if (isToken) {
+      // 关键：彻底移除 Authorization（兼容大小写）
+      delete config.headers.Authorization
+      delete config.headers.authorization
+      delete config.headers.isToken
+    } else if (getAccessToken() && !isToken) {
       config.headers.Authorization = 'Bearer ' + getAccessToken() // 让每个请求携带自定义token
     }
     // 设置租户
@@ -98,7 +111,7 @@ service.interceptors.response.use(
     let { data } = response
     const config = response.config
     if (!data) {
-      // 返回“[HTTP]请求没有返回值”;
+      // 返回"[HTTP]请求没有返回值";
       throw new Error()
     }
     const { t } = useI18n()
@@ -121,6 +134,11 @@ service.interceptors.response.use(
       // 如果是忽略的错误码，直接返回 msg 异常
       return Promise.reject(msg)
     } else if (code === 401) {
+      // 判断是否为无需自动刷新Token的接口
+      if (noRefreshTokenApi.some(api => config.url?.includes(api))) {
+        // 直接返回401错误，不自动刷新
+        return Promise.reject(data);
+      }
       // 如果未认证，并且未进行刷新令牌，说明可能是访问令牌过期了
       if (!isRefreshToken) {
         isRefreshToken = true

@@ -88,10 +88,62 @@
         label="是否 Path Style"
         prop="config.enablePathStyleAccess"
       >
-        <el-radio-group v-model="formData.config.enablePathStyleAccess">
-          <el-radio key="true" :value="true">启用</el-radio>
-          <el-radio key="false" :value="false">禁用</el-radio>
-        </el-radio-group>
+        <el-switch v-model="formData.config.enablePathStyleAccess" />
+      </el-form-item>
+      
+      <!-- CDN配置 -->
+      <el-divider v-if="formData.storage === 20" content-position="left">CDN 配置</el-divider>
+      <el-form-item
+        v-if="formData.storage === 20"
+        label="启用CDN"
+        prop="config.cdn.enabled"
+      >
+        <el-switch v-model="formData.config.cdn.enabled" />
+      </el-form-item>
+      <el-form-item
+        v-if="formData.storage === 20 && formData.config.cdn.enabled"
+        label="CDN类型"
+        prop="config.cdn.type"
+      >
+        <el-select v-model="formData.config.cdn.type" placeholder="请选择CDN类型">
+          <el-option label="阿里云CDN" value="aliyun" />
+          <el-option label="腾讯云CDN" value="qcloud" />
+          <el-option label="七牛云CDN" value="qiniu" />
+        </el-select>
+      </el-form-item>
+      <el-form-item
+        v-if="formData.storage === 20 && formData.config.cdn.enabled"
+        label="CDN域名"
+        prop="config.cdn.domain"
+      >
+        <el-input v-model="formData.config.cdn.domain" placeholder="请输入CDN域名">
+          <template #prepend>https://</template>
+        </el-input>
+      </el-form-item>
+      <!-- 刷新CDN缓存 -->
+      <el-form-item
+        v-if="formData.storage === 20 && formData.config.cdn.enabled"
+        label="刷新对象"
+        prop="config.cdn.refreshObjectPaths"
+      >
+        <el-input
+          v-model="formData.config.cdn.refreshObjectPaths"
+          type="textarea"
+          :rows="3"
+          placeholder="请输入需要刷新的文件路径，多个路径请换行分隔"
+        />
+      </el-form-item>
+      <el-form-item
+        v-if="formData.storage === 20 && formData.config.cdn.enabled"
+        label="刷新目录"
+        prop="config.cdn.refreshDirPaths"
+      >
+        <el-input
+          v-model="formData.config.cdn.refreshDirPaths"
+          type="textarea"
+          :rows="3"
+          placeholder="请输入需要刷新的目录路径，多个路径请换行分隔"
+        />
       </el-form-item>
       <!-- 通用 -->
       <el-form-item v-if="formData.storage === 20" label="自定义域名">
@@ -127,7 +179,27 @@ const formData = ref({
   name: '',
   storage: 0,
   remark: '',
-  config: {} as FileConfigApi.FileClientConfig
+  config: {
+    basePath: '',
+    host: '',
+    port: undefined,
+    username: '',
+    password: '',
+    mode: '',
+    endpoint: '',
+    bucket: '',
+    accessKey: '',
+    accessSecret: '',
+    enablePathStyleAccess: false,
+    domain: '',
+    cdn: {
+      enabled: false,
+      domain: '',
+      type: '',
+      refreshObjectPaths: [],
+      refreshDirPaths: []
+    }
+  }
 })
 const formRules = reactive<FormRules>({
   name: [{ required: true, message: '配置名不能为空', trigger: 'blur' }],
@@ -154,14 +226,59 @@ const formRef = ref() // 表单 Ref
 /** 打开弹窗 */
 const open = async (type: string, id?: number) => {
   dialogVisible.value = true
-  dialogTitle.value = t('action.' + type)
+  dialogTitle.value = type === 'create' ? '新建文件配置' : '编辑文件配置'
   formType.value = type
   resetForm()
   // 修改时，设置数据
   if (id) {
     formLoading.value = true
     try {
-      formData.value = await FileConfigApi.getFileConfig(id)
+      const res = await FileConfigApi.getFileConfig(id)
+      
+      // 确保config对象存在
+      const config = res.config || {}
+      
+      // 确保config.cdn对象存在
+      if (config && !config.cdn) {
+        config.cdn = {
+          enabled: false,
+          domain: '',
+          type: '',
+          refreshObjectPaths: [],
+          refreshDirPaths: []
+        }
+      }
+      
+      formData.value = {
+        id: res.id,
+        name: res.name,
+        storage: res.storage,
+        remark: res.remark,
+        config: {
+          basePath: config.basePath || '',
+          host: config.host || '',
+          port: config.port,
+          username: config.username || '',
+          password: config.password || '',
+          mode: config.mode || '',
+          endpoint: config.endpoint || '',
+          bucket: config.bucket || '',
+          accessKey: config.accessKey || '',
+          accessSecret: config.accessSecret || '',
+          enablePathStyleAccess: !!config.enablePathStyleAccess,
+          domain: config.domain || '',
+          cdn: {
+            enabled: config.cdn?.enabled || false,
+            domain: config.cdn?.domain || '',
+            type: config.cdn?.type || '',
+            refreshObjectPaths: config.cdn?.refreshObjectPaths || [],
+            refreshDirPaths: config.cdn?.refreshDirPaths || []
+          }
+        }
+      }
+    } catch (error) {
+      console.error('获取文件配置详情出错:', error)
+      message.error('获取配置信息失败: ' + (error.message || String(error)))
     } finally {
       formLoading.value = false
     }
@@ -179,7 +296,33 @@ const submitForm = async () => {
   // 提交请求
   formLoading.value = true
   try {
-    const data = formData.value as unknown as FileConfigApi.FileConfigVO
+    // 确保配置数据格式正确
+    const data = { ...formData.value } as unknown as FileConfigApi.FileConfigVO
+    // 确保config字段存在
+    if (!data.config) {
+      data.config = {
+        basePath: '',
+        host: '',
+        port: undefined,
+        username: '',
+        password: '',
+        mode: '',
+        endpoint: '',
+        bucket: '',
+        accessKey: '',
+        accessSecret: '',
+        enablePathStyleAccess: false,
+        domain: '',
+        cdn: {
+          enabled: false,
+          domain: '',
+          type: '',
+          refreshObjectPaths: [],
+          refreshDirPaths: []
+        }
+      }
+    }
+    
     if (formType.value === 'create') {
       await FileConfigApi.createFileConfig(data)
       message.success(t('common.createSuccess'))
@@ -190,6 +333,9 @@ const submitForm = async () => {
     dialogVisible.value = false
     // 发送操作成功的事件
     emit('success')
+  } catch (error) {
+    console.error('提交文件配置出错:', error)
+    message.error('提交失败: ' + (error.message || String(error)))
   } finally {
     formLoading.value = false
   }
@@ -197,13 +343,38 @@ const submitForm = async () => {
 
 /** 重置表单 */
 const resetForm = () => {
+  // 确保重置为完整的初始状态
   formData.value = {
     id: undefined,
     name: '',
-    storage: undefined!,
+    storage: undefined as any, // 使用as any避免类型错误
     remark: '',
-    config: {} as FileConfigApi.FileClientConfig
+    config: {
+      basePath: '',
+      host: '',
+      port: undefined,
+      username: '',
+      password: '',
+      mode: '',
+      endpoint: '',
+      bucket: '',
+      accessKey: '',
+      accessSecret: '',
+      enablePathStyleAccess: false,
+      domain: '',
+      cdn: {
+        enabled: false,
+        domain: '',
+        type: '',
+        refreshObjectPaths: [],
+        refreshDirPaths: []
+      }
+    }
   }
+  
+  // 确保表单引用存在后再重置字段
+  nextTick(() => {
   formRef.value?.resetFields()
+  })
 }
 </script>

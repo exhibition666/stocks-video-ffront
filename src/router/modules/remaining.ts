@@ -51,6 +51,66 @@ const remainingRouter: AppRouteRecordRaw[] = [
     }
   },
   {
+    path: '/stocks-front/home',
+    component: () => import('@/views/stocks-front/home/index.vue'),
+    name: 'StocksFrontHome',
+    meta: {
+      title: '股票系统首页',
+      hidden: true,
+      noTagsView: true
+    }
+  },
+  {
+    path: '/stocks-front/filetest',
+    component: () => import('@/views/stocks-front/filetest/index.vue'),
+    name: 'StocksFileTest',
+    meta: {
+      title: '文件上传测试',
+      hidden: true,
+      noTagsView: true
+    }
+  },
+  {
+    path: '/stocks-front/filetest/stsdelete',
+    component: () => import('@/views/stocks-front/filetest/stsdelete.vue'),
+    name: 'StocksFileSTSDeleteTest',
+    meta: {
+      title: 'STS 文件删除测试',
+      hidden: true,
+      noTagsView: true
+    }
+  },
+  {
+    path: '/stocks-front/videodetail/:id',
+    component: () => import('@/views/stocks-front/videodetail/index.vue'),
+    name: 'StocksVideoDetail',
+    meta: {
+      title: '视频详情',
+      hidden: true,
+      noTagsView: true
+    }
+  },
+  {
+    path: '/stocks-front/login',
+    component: () => import('@/views/stocks-front/login/index.vue'),
+    name: 'StocksLogin',
+    meta: {
+      title: '股票系统登录',
+      hidden: true,
+      noTagsView: true
+    }
+  },
+  {
+    path: '/stocks-front/userDetail',
+    component: () => import('@/views/stocks-front/userDetail/index.vue'),
+    name: 'StocksUserDetail',
+    meta: {
+      title: '个人中心',
+      hidden: true,
+      noTagsView: true
+    }
+  },
+  {
     path: '/',
     component: Layout,
     redirect: '/index',

@@ -14,7 +14,7 @@ export interface FilePresignedUrlRespVO {
 
 // 查询文件列表
 export const getFilePage = (params: PageParam) => {
-  return request.get({ url: '/infra/file/page', params })
+  return request.get({ url: '/app-api/infra/file/page', params })
 }
 
 // 删除文件
@@ -30,7 +30,7 @@ export const deleteFileList = (ids: number[]) => {
 // 获取文件预签名地址
 export const getFilePresignedUrl = (name: string, directory?: string) => {
   return request.get<FilePresignedUrlRespVO>({
-    url: '/infra/file/presigned-url',
+    url: '/app-api/infra/file/presigned-url',
     params: { name, directory }
   })
 }
@@ -42,5 +42,26 @@ export const createFile = (data: any) => {
 
 // 上传文件
 export const updateFile = (data: any) => {
-  return request.upload({ url: '/infra/file/upload', data })
+  return request.upload({ url: '/app-api/infra/file/upload', data })
+}
+
+// 获取带签名的访问 URL
+export const getAccessUrl = (configId: string | number, path: string, timeout = 1800) => {
+  return request.get({
+    url: '/app-api/infra/file/access-url',
+    params: { configId, path, timeout }
+  })
+}
+
+// 列出 OSS 文件和文件夹
+export const listFiles = (data: { configId: string | number, path?: string, maxKeys?: number }, useAppApi = false) => {
+  // useAppApi: true 时走 app 端接口，否则管理后台接口
+  const url = useAppApi
+    ? '/app-api/infra/file/app-oss-sts/list-files'
+    : '/app-api/infra/file/oss-sts/list-files';
+  return request.post({
+    url,
+    data,
+    headers: { 'Content-Type': 'application/json' }
+  });
 }

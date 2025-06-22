@@ -13,6 +13,13 @@ export interface FileClientConfig {
   accessSecret?: string
   enablePathStyleAccess?: boolean
   domain: string
+  cdn?: {
+    enabled: boolean
+    domain: string
+    type: 'aliyun' | 'qcloud' | 'qiniu'
+    refreshObjectPaths: string[]
+    refreshDirPaths: string[]
+  }
 }
 
 export interface FileConfigVO {

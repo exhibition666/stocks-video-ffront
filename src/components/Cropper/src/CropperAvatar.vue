@@ -19,6 +19,7 @@ import { propTypes } from '@/utils/propTypes'
 import { useI18n } from 'vue-i18n'
 import CopperModal from './CopperModal.vue'
 import avatar from '@/assets/imgs/avatar.gif'
+import { getAccessUrl } from '@/api/infra/file'
 
 defineOptions({ name: 'CropperAvatar' })
 
@@ -26,7 +27,8 @@ const props = defineProps({
   width: propTypes.string.def('200px'),
   value: propTypes.string.def(''),
   showBtn: propTypes.bool.def(true),
-  btnText: propTypes.string.def('')
+  btnText: propTypes.string.def(''),
+  configId: propTypes.string.def('') // OSS配置ID
 })
 
 const emit = defineEmits(['update:value', 'change'])
@@ -55,7 +57,21 @@ function handleUploadSuccess({ source, data, filename }) {
   message.success(t('cropper.uploadSuccess'))
 }
 
-function open() {
+async function open() {
+  if (props.configId && sourceValue.value && sourceValue.value.startsWith('http')) {
+    // 如果已经是完整URL（例如OSS路径）并且有配置ID，则获取签名URL
+    try {
+      const res = await getAccessUrl(props.configId, sourceValue.value)
+      if (res && res.accessUrl) {
+        cropperModelRef.value.openModal(res.accessUrl)
+        return
+      }
+    } catch (error) {
+      console.error('获取图片URL失败:', error)
+      message.error(t('获取图片URL失败'))
+    }
+  }
+  // 默认行为或获取URL失败时直接打开
   cropperModelRef.value.openModal()
 }
 

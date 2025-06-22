@@ -53,7 +53,11 @@ const whiteList = [
   '/auth-redirect',
   '/bind',
   '/register',
-  '/oauthLogin/gitee'
+  '/oauthLogin/gitee',
+  '/stocks-front/home',
+  '/stocks-front/videodetail',
+  '/stocks-front/login',
+  '/stocks-front/userDetail'
 ]
 
 // 路由加载前
@@ -64,6 +68,16 @@ router.beforeEach(async (to, from, next) => {
     if (to.path === '/login') {
       next({ path: '/' })
     } else {
+      // 判断是否前台页面
+      if (to.path.startsWith('/stocks-front')) {
+        // 前台页面不加载后台用户和权限信息
+        const dictStore = useDictStoreWithOut()
+        if (!dictStore.getIsSetDict) {
+          await dictStore.setDictMap()
+        }
+        next()
+        return
+      }
       // 获取所有字典
       const dictStore = useDictStoreWithOut()
       const userStore = useUserStoreWithOut()
@@ -91,10 +105,15 @@ router.beforeEach(async (to, from, next) => {
       }
     }
   } else {
-    if (whiteList.indexOf(to.path) !== -1) {
+    if (whiteList.some(path => to.path.startsWith(path))) {
       next()
     } else {
-      next(`/login?redirect=${to.fullPath}`) // 否则全部重定向到登录页
+      // 如果访问的是股票系统相关页面，重定向到股票系统的登录页
+      if (to.path.startsWith('/stocks-front/')) {
+        next(`/stocks-front/login?redirect=${to.fullPath}`)
+      } else {
+        next(`/login?redirect=${to.fullPath}`) // 否则全部重定向到系统默认登录页
+      }
     }
   }
 })
