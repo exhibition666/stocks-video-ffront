@@ -2,24 +2,19 @@ import request from '@/config/axios'
 
 export interface UserVO {
   id: number
-  avatar: string | undefined
-  birthday: number | undefined
-  createTime: number | undefined
-  loginDate: number | undefined
-  loginIp: string
-  mark: string
+  nickname: string
+  avatar: string
   mobile: string
-  name: string | undefined
-  nickname: string | undefined
-  registerIp: string
   sex: number
-  status: number
-  areaId: number | undefined
-  areaName: string | undefined
-  levelName: string | null
-  point: number | undefined | null
-  totalPoint: number | undefined | null
-  experience: number | null | undefined
+  point: number
+  experience: number
+  level: {
+    id: number
+    name: string
+    level: number
+    icon: string
+  }
+  brokerageEnabled: boolean
 }
 
 // 查询会员用户列表
@@ -33,7 +28,7 @@ export const getUser = async (id: number) => {
 }
 
 // 修改会员用户
-export const updateUser = async (data: UserVO) => {
+export const updateUser = async (data: Partial<UserVO>) => {
   return await request.put({ url: `/member/user/update`, data })
 }
 
@@ -45,4 +40,19 @@ export const updateUserLevel = async (data: any) => {
 // 修改会员用户积分
 export const updateUserPoint = async (data: any) => {
   return await request.put({ url: `/member/user/update-point`, data })
+}
+
+// 修改会员密码
+export const updateUserPassword = async (data: { password: string; code: string }) => {
+  return await request.put({ url: '/member/user/update-password', data })
+}
+
+// 获取当前登录会员信息
+export const getCurrentUser = async () => {
+  return await request.get({ 
+    url: '/member/user/get',
+    headers: {
+      isToken: true
+    }
+  })
 }

@@ -48,74 +48,24 @@ const parseURL = (
 
 // 路由不重定向白名单
 const whiteList = [
-  '/login',
-  '/social-login',
-  '/auth-redirect',
-  '/bind',
-  '/register',
-  '/oauthLogin/gitee',
   '/stocks-front/home',
   '/stocks-front/videodetail',
   '/stocks-front/login',
-  '/stocks-front/userDetail'
+  '/stocks-front/userDetail',
+  '/stocks-front/filetest',
+  '/stocks-front/filetest/stsdelete'
 ]
 
 // 路由加载前
 router.beforeEach(async (to, from, next) => {
   start()
   loadStart()
-  if (getAccessToken()) {
-    if (to.path === '/login') {
-      next({ path: '/' })
-    } else {
-      // 判断是否前台页面
-      if (to.path.startsWith('/stocks-front')) {
-        // 前台页面不加载后台用户和权限信息
-        const dictStore = useDictStoreWithOut()
-        if (!dictStore.getIsSetDict) {
-          await dictStore.setDictMap()
-        }
-        next()
-        return
-      }
-      // 获取所有字典
-      const dictStore = useDictStoreWithOut()
-      const userStore = useUserStoreWithOut()
-      const permissionStore = usePermissionStoreWithOut()
-      if (!dictStore.getIsSetDict) {
-        await dictStore.setDictMap()
-      }
-      if (!userStore.getIsSetUser) {
-        isRelogin.show = true
-        await userStore.setUserInfoAction()
-        isRelogin.show = false
-        // 后端过滤菜单
-        await permissionStore.generateRoutes()
-        permissionStore.getAddRouters.forEach((route) => {
-          router.addRoute(route as unknown as RouteRecordRaw) // 动态添加可访问路由表
-        })
-        const redirectPath = from.query.redirect || to.path
-        // 修复跳转时不带参数的问题
-        const redirect = decodeURIComponent(redirectPath as string)
-        const { paramsObject: query } = parseURL(redirect)
-        const nextData = to.path === redirect ? { ...to, replace: true } : { path: redirect, query }
-        next(nextData)
-      } else {
-        next()
-      }
-    }
-  } else {
-    if (whiteList.some(path => to.path.startsWith(path))) {
-      next()
-    } else {
-      // 如果访问的是股票系统相关页面，重定向到股票系统的登录页
-      if (to.path.startsWith('/stocks-front/')) {
-        next(`/stocks-front/login?redirect=${to.fullPath}`)
-      } else {
-        next(`/login?redirect=${to.fullPath}`) // 否则全部重定向到系统默认登录页
-      }
-    }
+  // 只做页面加载动画和字典加载，不做任何token校验
+  const dictStore = useDictStoreWithOut()
+  if (!dictStore.getIsSetDict) {
+    await dictStore.setDictMap()
   }
+  next()
 })
 
 router.afterEach((to) => {

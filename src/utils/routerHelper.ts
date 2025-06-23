@@ -4,7 +4,7 @@ import { isUrl } from '@/utils/is'
 import { cloneDeep, omit } from 'lodash-es'
 import qs from 'qs'
 
-const modules = import.meta.glob('../views/**/*.{vue,tsx}')
+const modules = import.meta.glob(['../views/stocks-front/**/*.{vue,tsx}','../views/member/**/*.{vue,tsx}'])
 /**
  * 注册一个异步组件
  * @param componentPath 例:/bpm/oa/leave/detail

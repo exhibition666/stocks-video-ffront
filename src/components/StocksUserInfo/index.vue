@@ -26,8 +26,9 @@ const { getPrefixCls } = useDesign()
 
 const prefixCls = getPrefixCls('user-info')
 
-const avatar = computed(() => userStore.user.avatar || avatarImg)
-const userName = computed(() => userStore.user.nickname ?? 'Admin')
+const avatar = computed(() => userStore.user?.avatar || avatarImg)
+const userName = computed(() => userStore.user?.nickname ?? 'Admin')
+const levelName = computed(() => userStore.user?.level?.name || '')
 
 // 锁定屏幕
 const lockStore = useLockStore()
@@ -68,6 +69,7 @@ const toAdminBackend = () => {
       <span class="pl-[5px] text-14px text-[var(--top-header-text-color)] <lg:hidden">
         {{ userName }}
       </span>
+      <el-tag v-if="levelName" type="info" effect="dark" class="level-tag ml-2">{{ levelName }}</el-tag>
     </div>
     <template #dropdown>
       <ElDropdownMenu>
@@ -97,6 +99,13 @@ const toAdminBackend = () => {
 </template>
 
 <style scoped lang="scss">
+.level-tag {
+  margin-right: 10px;
+  font-size: 15px;
+  font-weight: bold;
+  padding: 6px 16px;
+  border-radius: 16px;
+}
 .fade-bottom-enter-active,
 .fade-bottom-leave-active {
   transition:

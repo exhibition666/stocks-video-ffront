@@ -33,7 +33,7 @@ export const getTenantByWebsite = (website: string) => {
 
 // 登出
 export const loginOut = () => {
-  return request.post({ url: '/system/auth/logout' })
+  return request.post({ url: '/member/auth/logout' })
 }
 
 // 获取用户权限信息

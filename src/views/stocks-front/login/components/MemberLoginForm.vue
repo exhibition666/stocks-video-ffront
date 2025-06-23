@@ -50,6 +50,7 @@ import { sendSmsCode, smsLogin, login } from '@/api/member/auth'
 import { setToken } from '@/utils/auth'
 import { useUserStore } from '@/store/modules/user'
 import { useRouter } from 'vue-router'
+import { debugAuthState } from '@/utils/authDebugger'
 
 const activeTab = ref('sms')
 const loading = ref(false)
@@ -122,9 +123,36 @@ const handlePasswordLogin = async () => {
 
 // --- 通用登录成功处理 ---
 const handleLoginSuccess = (res) => {
+  console.group('===== 登录成功处理 =====')
+  console.log('登录API响应:', res)
+  
+  console.log('设置 token 前的状态:')
+  debugAuthState()
+  
+  // 设置 token
   setToken(res)
-  ElMessage.success('登录成功')
-  router.push({ path: '/stocks-front/home' }) // 跳转到前台首页
+  console.log('设置 token 后的状态:')
+  debugAuthState()
+  
+  // 强制延迟一下，确保 token 已经被设置
+  setTimeout(() => {
+    // 更新用户信息 - 使用 setMemberInfo 而不是 setUserInfoAction
+    userStore.setMemberInfo().then(() => {
+      console.log('更新会员信息后的状态:')
+      debugAuthState()
+      
+      ElMessage.success('登录成功')
+      router.push({ path: '/stocks-front/home' }) // 跳转到前台首页
+      console.groupEnd()
+    }).catch(error => {
+      console.error('更新会员信息失败:', error)
+      console.groupEnd()
+      
+      // 即使获取会员信息失败，也允许用户登录成功
+      ElMessage.success('登录成功')
+      router.push({ path: '/stocks-front/home' }) // 跳转到前台首页
+    })
+  }, 300) // 延迟300ms
 }
 </script>
 

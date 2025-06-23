@@ -26,19 +26,18 @@ const ignoreMsgs = [
 ]
 // 是否显示重新登录
 export const isRelogin = { show: false }
-// Axios 无感知刷新令牌，参考 https://www.dashingdog.cn/article/11 与 https://segmentfault.com/a/1190000020210980 实现
 // 请求队列
-let requestList: any[] = []
+const requestList: any[] = []
 // 是否正在刷新中
-let isRefreshToken = false
+const isRefreshToken = false
 // 请求白名单，无须 token 的接口
 const whiteList: string[] = ['/login', '/refresh-token']
 
 // 需要跳过自动刷新Token的接口白名单
 const noRefreshTokenApi = [
-  '/app-api/member/auth/send-sms-code',
-  '/app-api/member/auth/sms-login',
-  '/app-api/member/auth/login'
+  '/member/auth/send-sms-code',
+  '/member/auth/sms-login',
+  '/member/auth/login'
   // 可根据实际情况继续补充
 ];
 
@@ -73,8 +72,11 @@ service.interceptors.request.use(
     }
     // 设置租户
     if (tenantEnable && tenantEnable === 'true') {
-      const tenantId = getTenantId()
-      if (tenantId) config.headers['tenant-id'] = tenantId
+      let tenantId = getTenantId()
+      if (!tenantId) {
+        tenantId = 1 // 默认租户ID，保证游客和未登录用户可访问
+      }
+      config.headers['tenant-id'] = tenantId
       // 只有登录时，才设置 visit-tenant-id 访问租户
       const visitTenantId = getVisitTenantId()
       if (config.headers.Authorization && visitTenantId) {
@@ -134,50 +136,14 @@ service.interceptors.response.use(
       // 如果是忽略的错误码，直接返回 msg 异常
       return Promise.reject(msg)
     } else if (code === 401) {
-      // 判断是否为无需自动刷新Token的接口
-      if (noRefreshTokenApi.some(api => config.url?.includes(api))) {
-        // 直接返回401错误，不自动刷新
-        return Promise.reject(data);
+      // 对于会员系统，401 可能是未登录状态，不需要弹窗
+      // 检查是否是会员相关 API
+      if (config.url && config.url.includes('/member/')) {
+        console.log('会员 API 未登录:', config.url)
+        return Promise.reject('未登录，无权限访问')
       }
-      // 如果未认证，并且未进行刷新令牌，说明可能是访问令牌过期了
-      if (!isRefreshToken) {
-        isRefreshToken = true
-        // 1. 如果获取不到刷新令牌，则只能执行登出操作
-        if (!getRefreshToken()) {
-          return handleAuthorized()
-        }
-        // 2. 进行刷新访问令牌
-        try {
-          const refreshTokenRes = await refreshToken()
-          // 2.1 刷新成功，则回放队列的请求 + 当前请求
-          setToken((await refreshTokenRes).data.data)
-          config.headers!.Authorization = 'Bearer ' + getAccessToken()
-          requestList.forEach((cb: any) => {
-            cb()
-          })
-          requestList = []
-          return service(config)
-        } catch (e) {
-          // 为什么需要 catch 异常呢？刷新失败时，请求因为 Promise.reject 触发异常。
-          // 2.2 刷新失败，只回放队列的请求
-          requestList.forEach((cb: any) => {
-            cb()
-          })
-          // 提示是否要登出。即不回放当前请求！不然会形成递归
-          return handleAuthorized()
-        } finally {
-          requestList = []
-          isRefreshToken = false
-        }
-      } else {
-        // 添加到队列，等待刷新获取到新的令牌
-        return new Promise((resolve) => {
-          requestList.push(() => {
-            config.headers!.Authorization = 'Bearer ' + getAccessToken() // 让每个请求携带自定义token 请根据实际情况自行修改
-            resolve(service(config))
-          })
-        })
-      }
+      // 对于非会员 API，尝试刷新 token
+      return handleAuthorized()
     } else if (code === 500) {
       ElMessage.error(t('sys.api.errMsg500'))
       return Promise.reject(new Error(msg))

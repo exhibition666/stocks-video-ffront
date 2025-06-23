@@ -4,6 +4,8 @@ import { useAppStore } from '@/store/modules/app'
 import { useDesign } from '@/hooks/web/useDesign'
 import { CACHE_KEY, useCache } from '@/hooks/web/useCache'
 import routerSearch from '@/components/RouterSearch/index.vue'
+import { onMounted, onUnmounted } from 'vue'
+import { setupAuthDebugger } from '@/utils/authDebugger'
 
 defineOptions({ name: 'APP' })
 
@@ -23,6 +25,23 @@ const setDefaultTheme = () => {
   appStore.setIsDark(isDarkTheme)
 }
 setDefaultTheme()
+
+// 设置全局登录状态调试
+let cleanupAuthDebugger: (() => void) | null = null
+
+onMounted(() => {
+  // 启动登录状态调试器
+  cleanupAuthDebugger = setupAuthDebugger()
+  console.log('全局登录状态调试已启动')
+})
+
+onUnmounted(() => {
+  // 清理登录状态调试器
+  if (cleanupAuthDebugger) {
+    cleanupAuthDebugger()
+    cleanupAuthDebugger = null
+  }
+})
 </script>
 <template>
   <ConfigGlobal :size="currentSize">
@@ -44,10 +63,11 @@ body {
 
   padding: 0 !important;
   margin: 0;
-  overflow: hidden;
+  overflow: auto !important;
 
   #app {
     @extend .size;
+    overflow: auto !important;
   }
 }
 

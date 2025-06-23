@@ -1,0 +1,172 @@
+# 会员信息相关接口文档（App端）
+
+本文件汇总了前端会员（App端）可调用的所有会员信息相关接口，包括基本信息、手机号、密码等，均为 `/member/user` 路径下的接口。
+
+---
+
+## 1. 获取会员基本信息
+- **接口地址**：`GET /member/user/get`
+- **请求方式**：GET
+- **请求参数**：无
+- **返回参数**：
+  ```json
+  {
+    "id": 123,
+    "nickname": "张三",
+    "avatar": "https://xxx.com/xxx.png",
+    "sex": 1, // 1=男，2=女
+    "mobile": "13800000000",
+    "levelId": 1,
+    "levelName": "黄金会员",
+    "experience": 100,
+    "point": 200,
+    "totalPoint": 500,
+    "areaId": 1001,
+    "areaName": "上海市浦东新区",
+    "registerIp": "1.2.3.4",
+    "createTime": 1710000000000,
+    "loginDate": 1711000000000,
+    ...
+  }
+  ```
+  - 字段说明：
+    - `sex`：性别（1=男，2=女）
+    - `levelId`/`levelName`：会员等级
+    - `experience`：经验值
+    - `point`/`totalPoint`：当前积分/累计积分
+    - `areaId`/`areaName`：地区
+    - `registerIp`：注册IP
+    - `createTime`/`loginDate`：注册/最后登录时间（时间戳）
+
+---
+
+## 2. 修改会员基本信息
+- **接口地址**：`PUT /member/user/update`
+- **请求方式**：PUT
+- **请求体参数**（AppMemberUserUpdateReqVO）：
+  ```json
+  {
+    "nickname": "新昵称",
+    "avatar": "https://xxx.com/xxx.png",
+    "sex": 1
+  }
+  ```
+  - 字段说明：
+  - `nickname`：用户昵称（字符串）
+  - `avatar`：头像URL（字符串，必须为URL格式）
+  - `sex`：性别（整数，1=男，2=女）
+- **返回示例**：
+  ```json
+  { "code": 200, "msg": "操作成功" }
+  ```
+
+---
+
+## 3. 修改会员手机号
+- **接口地址**：`PUT /member/user/update-mobile`
+- **请求方式**：PUT
+- **请求体参数**（AppMemberUserUpdateMobileReqVO）：
+  ```json
+  {
+    "code": "1234",         // 新手机号收到的验证码
+    "mobile": "13800000001",// 新手机号
+    "oldCode": "5678"       // 原手机号收到的验证码（可选）
+  }
+  ```
+  - 字段说明：
+  - `code`：新手机号收到的验证码（必填）
+  - `mobile`：新手机号（必填）
+  - `oldCode`：原手机号收到的验证码（可选）
+- **返回示例**：
+  ```json
+  { "code": 200, "msg": "操作成功" }
+  ```
+
+---
+
+## 4. 基于微信小程序授权码修改手机号
+- **接口地址**：`PUT /member/user/update-mobile-by-weixin`
+- **请求方式**：PUT
+- **请求体参数**（AppMemberUserUpdateMobileByWeixinReqVO）：
+  ```json
+  {
+    "code": "微信授权码"
+  }
+  ```
+  - 字段说明：
+  - `code`：微信小程序授权码
+- **返回示例**：
+  ```json
+  { "code": 200, "msg": "操作成功" }
+  ```
+
+---
+
+## 5. 修改会员密码
+- **接口地址**：`PUT /member/user/update-password`
+- **请求方式**：PUT
+- **请求体参数**（AppMemberUserUpdatePasswordReqVO）：
+  ```json
+  {
+    "password": "新密码",
+    "code": "1234" // 手机验证码
+  }
+  ```
+  - 字段说明：
+  - `password`：新密码（必填）
+  - `code`：手机验证码（必填）
+- **返回示例**：
+  ```json
+  { "code": 200, "msg": "密码修改成功" }
+  ```
+
+---
+
+## 6. 忘记密码（重置密码）
+- **接口地址**：`PUT /member/user/reset-password`
+- **请求方式**：PUT
+- **请求体参数**（AppMemberUserResetPasswordReqVO）：
+  ```json
+  {
+    "mobile": "13800000001",
+    "password": "新密码",
+    "code": "1234" // 手机验证码
+  }
+  ```
+  - 字段说明：
+  - `mobile`：手机号（必填）
+  - `password`：新密码（必填）
+  - `code`：手机验证码（必填）
+- **返回示例**：
+  ```json
+  { "code": 200, "msg": "密码重置成功" }
+  ```
+
+---
+
+## 7. 发送短信验证码
+- **接口地址**：`POST /app-api/member/auth/send-sms-code`
+- **请求方式**：POST
+- **请求体参数**：
+  ```json
+  {
+    "mobile": "13800000001",
+    "scene": 1, // 场景值，注册/修改密码/修改手机等
+    "createIp": "客户端IP"
+  }
+  ```
+  - 字段说明：
+    - `scene`：场景值（1=注册，2=修改密码，3=修改手机等，具体见后端枚举）
+    - `createIp`：客户端IP（可选）
+- **返回示例**：
+  ```json
+  { "code": 200, "msg": "验证码发送成功" }
+  ```
+
+---
+
+## 说明
+- 所有接口都需要会员用户登录后携带 token 调用（除重置密码、发送验证码等部分接口）。
+- 参数类型和字段名请严格按照上面示例，后端有校验。
+- 具体"场景值"可根据后端枚举（如注册、修改密码、修改手机等）传递。
+- 如需详细字段说明或接口返回示例，请联系后端。

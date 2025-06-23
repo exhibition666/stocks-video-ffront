@@ -20,19 +20,26 @@ export interface PasswordLoginReqVO {
 
 // 发送短信验证码
 export const sendSmsCode = (data: SendSmsCodeReqVO): Promise<boolean> => {
+  // scene: 1=登录, 2=改手机号, 3=修改密码, 4=重置密码
+  if (data.scene === 1 || data.scene === 2 || data.scene === 4) {
   return request.post({
-    baseURL: import.meta.env.VITE_BASE_URL,
-    url: '/app-api/member/auth/send-sms-code',
+      url: '/member/auth/send-sms-code',
     data,
     headers: { isToken: false }
   })
+  } else {
+    // scene=3(修改密码)必须带token
+    return request.post({
+      url: '/member/auth/send-sms-code',
+      data
+    })
+  }
 }
 
 // 短信验证码登录 (包含无感注册)
 export const smsLogin = (data: SmsLoginReqVO): Promise<UserLoginVO> => {
   return request.post({
-    baseURL: import.meta.env.VITE_BASE_URL,
-    url: '/app-api/member/auth/sms-login',
+    url: '/member/auth/sms-login',
     data,
     headers: { isToken: false }
   })
@@ -41,8 +48,7 @@ export const smsLogin = (data: SmsLoginReqVO): Promise<UserLoginVO> => {
 // 账号密码登录
 export const login = (data: PasswordLoginReqVO): Promise<UserLoginVO> => {
   return request.post({
-    baseURL: import.meta.env.VITE_BASE_URL,
-    url: '/app-api/member/auth/login',
+    url: '/member/auth/login',
     data,
     headers: { isToken: false }
   })

@@ -7,3 +7,7 @@ pnpm-debug
 auto-*.d.ts
 .idea
 .history
+
+
+# 自定义忽略敏感数据
+.cursor/

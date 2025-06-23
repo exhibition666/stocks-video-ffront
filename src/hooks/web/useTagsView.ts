@@ -40,10 +40,7 @@ export const useTagsView = () => {
     tagsViewStore.delCachedView()
     const { path, query } = view || unref(currentRoute)
     await nextTick()
-    replace({
-      path: '/redirect' + path,
-      query: query
-    })
+    replace({ path, query })
     callback?.()
   }
 

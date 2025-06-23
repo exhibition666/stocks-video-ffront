@@ -41,27 +41,9 @@
           </el-descriptions-item>
           <el-descriptions-item>
             <template #label>
-              <descriptions-item-label icon="ep:position" label="注册 IP" />
-            </template>
-            {{ user.registerIp }}
-          </el-descriptions-item>
-          <el-descriptions-item>
-            <template #label>
               <descriptions-item-label icon="fa:birthday-cake" label="生日" />
             </template>
             {{ user.birthday ? formatDate(user.birthday as any) : '空' }}
-          </el-descriptions-item>
-          <el-descriptions-item>
-            <template #label>
-              <descriptions-item-label icon="ep:calendar" label="注册时间" />
-            </template>
-            {{ user.createTime ? formatDate(user.createTime as any) : '空' }}
-          </el-descriptions-item>
-          <el-descriptions-item>
-            <template #label>
-              <descriptions-item-label icon="ep:calendar" label="最后登录时间" />
-            </template>
-            {{ user.loginDate ? formatDate(user.loginDate as any) : '空' }}
           </el-descriptions-item>
         </el-descriptions>
       </el-col>
@@ -101,27 +83,9 @@
         </el-descriptions-item>
         <el-descriptions-item>
           <template #label>
-            <descriptions-item-label icon="ep:position" label="注册 IP" />
-          </template>
-          {{ user.registerIp }}
-        </el-descriptions-item>
-        <el-descriptions-item>
-          <template #label>
             <descriptions-item-label icon="fa:birthday-cake" label="生日" />
           </template>
           {{ user.birthday ? formatDate(user.birthday as any) : '空' }}
-        </el-descriptions-item>
-        <el-descriptions-item>
-          <template #label>
-            <descriptions-item-label icon="ep:calendar" label="注册时间" />
-          </template>
-          {{ user.createTime ? formatDate(user.createTime as any) : '空' }}
-        </el-descriptions-item>
-        <el-descriptions-item>
-          <template #label>
-            <descriptions-item-label icon="ep:calendar" label="最后登录时间" />
-          </template>
-          {{ user.loginDate ? formatDate(user.loginDate as any) : '空' }}
         </el-descriptions-item>
       </el-descriptions>
     </template>

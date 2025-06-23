@@ -551,7 +551,7 @@ const scrollToStsToken = () => {
 async function fetchOssConfigList() {
   const accessToken = getAccessToken();
   if (!accessToken) {
-    ElMessage.warning('请先登录系统账号');
+    errorMessage.value = '未登录，部分配置仅登录后可见';
     return;
   }
   try {
@@ -567,13 +567,16 @@ async function fetchOssConfigList() {
       throw new Error(result.msg || '获取OSS配置列表失败');
     }
     ossConfigList.value = result.data.list || [];
-    // 自动设置主配置
     const mainConfig = ossConfigList.value.find(item => item.master === true || item.master === 1 || item.master === '是');
     if (mainConfig) {
       configId.value = mainConfig.id;
     }
   } catch (e) {
-    ElMessage.error('获取OSS配置列表失败：' + (e.message || e));
+    if (e && e.toString().includes('401')) {
+      errorMessage.value = '未登录，部分配置仅登录后可见';
+    } else {
+      errorMessage.value = '获取OSS配置列表失败：' + (e.message || e);
+    }
     ossConfigList.value = [];
   }
 }

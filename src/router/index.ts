@@ -29,7 +29,7 @@ router.beforeEach((to, from, next) => {
 */
 
 export const resetRouter = (): void => {
-  const resetWhiteNameList = ['Redirect', 'Login', 'NoFind', 'Root']
+  const resetWhiteNameList = ['Root', 'NotFound']
   router.getRoutes().forEach((route) => {
     const { name } = route
     if (name && !resetWhiteNameList.includes(name as string)) {

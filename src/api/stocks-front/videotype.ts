@@ -5,6 +5,6 @@ import type { VideoType } from '@/api/system/videotype'
 export const FrontVideoTypeApi = {
   // 获取所有视频分类列表
   getAllVideoTypes: async () => {
-    return await request.get({ url: `/app-api/stocks-front/video-type/page`, params: { pageSize: 100 } })
+    return await request.get({ url: `/stocks-front/video-type/page`, params: { pageSize: 100 } })
   }
 } 

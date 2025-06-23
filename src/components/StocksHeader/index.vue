@@ -27,6 +27,11 @@ const isUserLoggedIn = computed(() => {
   return !!getAccessToken()
 })
 
+// 获取用户等级名称
+const levelName = computed(() => {
+  return userStore.user?.level?.name || ''
+})
+
 const goToHome = () => {
   router.push('/stocks-front/home')
 }
@@ -43,8 +48,11 @@ const handleSearch = () => {
 <template>
   <div :class="prefixCls">
     <div :class="`${prefixCls}-left`" @click="goToHome">
+      <template v-if="levelName && isUserLoggedIn">
+        <el-tag type="info" effect="dark" class="level-tag">{{ levelName }}</el-tag>
+      </template>
       <img src="@/assets/imgs/logo.png" alt="Logo" class="logo" />
-      <span class="title">股票交易系统</span>
+      <span class="title">Nine Nine Six Network</span>
     </div>
     <div v-if="showSearch" :class="`${prefixCls}-search`">
       <el-input
@@ -59,7 +67,6 @@ const handleSearch = () => {
       </el-input>
     </div>
     <div :class="`${prefixCls}-right`">
-      <!-- 根据登录状态显示不同的内容 -->
       <template v-if="isUserLoggedIn">
         <StocksUserInfo />
       </template>
@@ -80,8 +87,8 @@ $prefix-cls: #{$namespace}-stocks-header;
   right: 0;
   height: 60px;
   padding: 0 20px;
-  background-color: var(--el-bg-color);
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  background: linear-gradient(90deg, #2d006b 0%, #3a1c71 100%);
+  border-bottom: 1.5px solid #e0e0e0;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -94,20 +101,30 @@ $prefix-cls: #{$namespace}-stocks-header;
     min-width: 200px;
     cursor: pointer;
 
+    .level-tag {
+      margin-right: 10px;
+      font-size: 15px;
+      font-weight: bold;
+      padding: 6px 16px;
+      border-radius: 16px;
+      background: #fffbe6;
+      color: #ff9800;
+      border: none;
+    }
     .logo {
       width: 40px;
       height: 40px;
     }
-
     .title {
-      font-size: 20px;
+      font-size: 24px;
       font-weight: bold;
-      color: var(--el-text-color-primary);
+      color: #fff;
+      text-shadow: 2px 2px 8px #00000033;
+      margin-left: 8px;
     }
-
     &:hover {
       .title {
-        color: var(--el-color-primary);
+        color: #ffe082;
       }
     }
   }

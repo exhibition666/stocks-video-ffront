@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { useDesign } from '@/hooks/web/useDesign'
 import { useRouter } from 'vue-router'
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import StocksHeader from '@/components/StocksHeader/index.vue'
 import { FrontVideoApi } from '@/api/stocks-front/video'
 import { FrontVideoTypeApi } from '@/api/stocks-front/videotype'
@@ -9,6 +9,8 @@ import type { Video } from '@/api/system/video'
 import type { VideoType } from '@/api/system/videotype'
 import { getAccessUrl } from '@/api/infra/file'
 import { useSignedUrlPreview } from '@/utils/useSignedUrlPreview'
+import VipUpgrade from '@/views/stocks-front/vip_upgrade/index.vue'
+import { useUserStore } from '@/store/modules/user'
 
 const { getPrefixCls } = useDesign()
 const prefixCls = getPrefixCls('home')
@@ -40,6 +42,9 @@ const videoPicSignedUrlMap = ref<Record<number, ReturnType<typeof useSignedUrlPr
 // 当前选中的分类ID，null 表示全部
 const currentCategoryId = ref<number | null>(null)
 
+const userStore = useUserStore()
+const user = computed(() => userStore.user)
+
 // 获取签名URL的工具函数
 const fetchSignedUrl = async (path: string) => {
   if (!path) return ''
@@ -70,11 +75,13 @@ const fetchSignedUrl = async (path: string) => {
 const getVideoCategories = async () => {
   try {
     const res = await FrontVideoTypeApi.getAllVideoTypes()
-    console.log('获取视频分类结果:', res)
     categories.value = res.list || []
   } catch (error) {
-    console.error('获取视频分类失败:', error)
-    errorMsg.value = '获取视频分类失败: ' + (error.message || '未知错误')
+    if (error && error.toString().includes('401')) {
+      errorMsg.value = '未登录，部分分类仅登录后可见';
+    } else {
+      errorMsg.value = '获取视频分类失败: ' + (error.message || '未知错误')
+    }
   }
 }
 
@@ -92,10 +99,9 @@ const getVideoList = async (categoryId?: number) => {
     }
     const res = await FrontVideoApi.getVideoList(params)
     videoList.value = res.list || []
-    // 新增：为每个视频创建 useSignedUrlPreview 实例，并获取签名URL
     videoPicSignedUrlMap.value = {}
     for (const video of videoList.value) {
-          if (video.picUrl) {
+      if (video.picUrl) {
         const preview = useSignedUrlPreview()
         videoPicSignedUrlMap.value[video.id] = preview
         preview.fetchSignedUrl(video.picUrl)
@@ -105,7 +111,11 @@ const getVideoList = async (categoryId?: number) => {
       errorMsg.value = '没有找到视频数据'
     }
   } catch (error) {
-    errorMsg.value = '获取视频列表失败: ' + (error.message || '未知错误')
+    if (error && error.toString().includes('401')) {
+      errorMsg.value = '未登录，部分视频仅登录后可见';
+    } else {
+      errorMsg.value = '获取视频列表失败: ' + (error.message || '未知错误')
+    }
   } finally {
     loading.value = false
   }
@@ -168,13 +178,27 @@ onMounted(async () => {
   
   getVideoCategories()
   getVideoList() // 默认加载全部视频
+  console.log('当前 userStore.user:', userStore.user)
 })
 </script>
 
 <template>
   <div :class="prefixCls">
     <StocksHeader />
-    
+    <div style="margin-bottom: 24px; max-width: 600px; margin-left: auto; margin-right: auto;">
+      <el-card v-if="user" shadow="hover">
+        <template #header>
+          <span>当前登录用户信息</span>
+        </template>
+        <div>昵称：{{ user.nickname }}</div>
+        <div>手机号：{{ user.mobile }}</div>
+        <div>等级ID：{{ user.level_id }}</div>
+        <div>积分：{{ user.point }}</div>
+        <div>性别：{{ user.sex === 1 ? '男' : user.sex === 2 ? '女' : '未知' }}</div>
+        <div>生日：{{ user.birthday }}</div>
+      </el-card>
+      <el-alert v-else title="未登录" type="info" show-icon />
+    </div>
     <div :class="`${prefixCls}-main`">
       <div :class="`${prefixCls}-sidebar`">
         <div class="category-header">视频分类</div>
@@ -196,16 +220,15 @@ onMounted(async () => {
             <span>{{ category.name }}</span>
           </li>
         </ul>
-        
-        <!-- 文件测试入口 -->
-        <div class="file-test-entry">
-          <el-button type="primary" @click="goToFileTest">文件上传测试</el-button>
-          <el-button type="danger" plain @click="goToSTSDeleteTest" style="margin-top: 10px;">
-            STS 删除测试
-          </el-button>
-        </div>
       </div>
       <div :class="`${prefixCls}-content`">
+        <div style="width:100%;display:flex;justify-content:center;margin-bottom:32px;">
+          <router-link to="/stocks-front/vip_upgrade">
+            <el-button type="primary" size="large" style="font-size:18px;padding: 0 48px;">
+              会员VIP充值/升级入口
+            </el-button>
+          </router-link>
+        </div>
         <div v-if="loading" class="loading-container">
           <el-skeleton :rows="3" animated />
           <el-skeleton :rows="3" animated />
@@ -256,40 +279,42 @@ $prefix-cls: #{$namespace}-home;
 .#{$prefix-cls} {
   width: 100%;
   min-height: 100vh;
-  background-color: #f8fafc;
-
+  background: #f6f8fb;
+  
   &-main {
     display: flex;
     padding-top: 60px;
-    height: calc(100vh - 60px);
+    min-height: calc(100vh - 60px);
+    background: none;
+    max-width: 1600px;
+    margin: 0 auto;
+    gap: 32px;
   }
 
   &-sidebar {
-    width: 240px;
-    padding: 28px 0 20px 0;
-    border-right: 1px solid #e4eaf3;
-    background-color: #fff;
+    width: 260px;
+    padding: 32px 0 24px 0;
+    border-right: none;
+    background: #fff;
     height: 100%;
     overflow-y: auto;
-    border-radius: 18px 0 0 18px;
-    box-shadow: 0 2px 12px 0 rgba(106,130,251,0.04);
-
+    border-radius: 18px;
+    box-shadow: 0 4px 24px 0 rgba(80,120,255,0.06);
+    margin-top: 32px;
     .category-header {
       padding: 0 24px 12px;
-      font-size: 17px;
+      font-size: 18px;
       font-weight: bold;
       color: #333;
       border-bottom: 1px solid #e4eaf3;
       margin-bottom: 8px;
       letter-spacing: 0.5px;
     }
-
     .category-list {
       list-style: none;
       padding: 0;
       margin: 0;
     }
-
     .category-item {
       display: flex;
       align-items: center;
@@ -312,21 +337,16 @@ $prefix-cls: #{$namespace}-home;
         font-size: 15px;
       }
     }
-    .file-test-entry {
-      padding: 20px;
-      margin-top: 20px;
-      border-top: 1px solid #e4eaf3;
-      text-align: center;
-    }
   }
 
   &-content {
     flex: 1;
-    padding: 32px 32px 32px 32px;
+    padding: 40px 40px 40px 40px;
     overflow-y: auto;
-    background-color: #f8fafc;
-    border-radius: 0 18px 18px 0;
+    background: #fff;
+    border-radius: 18px;
     min-height: 600px;
+    box-shadow: 0 4px 24px 0 rgba(80,120,255,0.06);
     .loading-container {
       max-width: 1200px;
       margin: 0 auto;
@@ -340,14 +360,14 @@ $prefix-cls: #{$namespace}-home;
   &-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 24px;
+    gap: 32px;
     max-width: 1800px;
     margin: 0 auto;
     padding: 0 16px;
   }
 
   &-card {
-    background-color: #fff;
+    background-color: #f8fafc;
     border-radius: 16px;
     overflow: hidden;
     transition: all 0.25s cubic-bezier(.23,1,.32,1);
@@ -363,7 +383,7 @@ $prefix-cls: #{$namespace}-home;
       position: relative;
       width: 100%;
       padding-top: 56.25%; // 16:9 比例
-      background: #f0f4ff;
+      background: #eaf1ff;
       img {
         position: absolute;
         top: 0;
@@ -425,13 +445,25 @@ $prefix-cls: #{$namespace}-home;
     }
   }
   @media (max-width: 1200px) {
+    &-main {
+      gap: 0;
+    }
     &-grid {
       grid-template-columns: repeat(2, 1fr);
+    }
+    &-sidebar {
+      display: none;
+    }
+    &-content {
+      padding: 24px 8px;
     }
   }
   @media (max-width: 768px) {
     &-grid {
       grid-template-columns: repeat(1, 1fr);
+    }
+    &-content {
+      padding: 8px 2px;
     }
   }
 }
