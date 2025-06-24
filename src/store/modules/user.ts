@@ -22,6 +22,7 @@ export interface MemberUserVO {
     icon: string
   }
   brokerageEnabled: boolean
+  vip_expire_time?: string
 }
 
 interface UserInfoVO {

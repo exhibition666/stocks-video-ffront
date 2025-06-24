@@ -32,3 +32,8 @@ export const updateWalletRechargePackage = async (data: WalletRechargePackageVO)
 export const deleteWalletRechargePackage = async (id: number) => {
   return await request.delete({ url: '/pay/wallet-recharge-package/delete?id=' + id })
 }
+
+// 查询可用的充值套餐列表
+export const getWalletRechargePackageList = async () => {
+  return await request.get({ url: '/pay/wallet-recharge-package/list' })
+}

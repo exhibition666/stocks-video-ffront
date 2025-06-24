@@ -88,6 +88,18 @@ const remainingRouter: AppRouteRecordRaw[] = [
     meta: { title: '登录状态调试', hidden: true, noTagsView: true }
   },
   {
+    path: '/pay/cashier',
+    component: () => import('@/views/pay/cashier/index.vue'),
+    name: 'PayCashier',
+    meta: { title: '支付收银台', hidden: true, noTagsView: true }
+  },
+  {
+    path: '/stocks-front/pay/cashier',
+    component: () => import('@/views/stocks-front/pay/cashier/index.vue'),
+    name: 'StocksFrontPayCashier',
+    meta: { title: '支付收银台', hidden: true, noTagsView: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     component: () => import('@/views/stocks-front/NotFound.vue'),

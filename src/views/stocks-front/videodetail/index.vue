@@ -293,8 +293,8 @@ watch(
                 ref="videoElement"
                 class="main-video-player"
                 :src="currentVideoUrl"
-                :poster="coverUrl"
-                controls
+              :poster="coverUrl"
+              controls
                 preload="auto"
                 controlsList="nodownload nofullscreen"
                 disablePictureInPicture
@@ -500,7 +500,7 @@ watch(
 }
 
 .main-video-cover {
-  width: 100%;
+    width: 100%;
   aspect-ratio: 16/9;
   border-radius: 12px;
   object-fit: cover;
@@ -558,8 +558,8 @@ watch(
       color: #fc5c7d;
     }
   }
-  
-  &:hover {
+
+      &:hover {
     opacity: 1;
   }
 }
@@ -597,7 +597,7 @@ watch(
       margin: 0 0 12px;
       font-weight: 600;
     }
-    
+
     p {
       font-size: 16px;
       margin: 0 0 24px;
@@ -684,7 +684,7 @@ watch(
   .no-desc {
     color: #909399;
     font-style: italic;
-  }
+}
 }
 
 .video-tags {
@@ -697,7 +697,7 @@ watch(
     color: #606266;
     margin-right: 8px;
     font-size: 14px;
-  }
+}
   
   .tag-item {
     margin-right: 8px;

@@ -196,6 +196,7 @@ onMounted(async () => {
         <div>积分：{{ user.point }}</div>
         <div>性别：{{ user.sex === 1 ? '男' : user.sex === 2 ? '女' : '未知' }}</div>
         <div>生日：{{ user.birthday }}</div>
+        <div v-if="user.vip_expire_time">VIP到期时间：{{ user.vip_expire_time }}</div>
       </el-card>
       <el-alert v-else title="未登录" type="info" show-icon />
     </div>
@@ -280,7 +281,7 @@ $prefix-cls: #{$namespace}-home;
   width: 100%;
   min-height: 100vh;
   background: #f6f8fb;
-  
+
   &-main {
     display: flex;
     padding-top: 60px;

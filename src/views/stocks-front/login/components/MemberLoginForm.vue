@@ -149,8 +149,8 @@ const handleLoginSuccess = (res) => {
       console.groupEnd()
       
       // 即使获取会员信息失败，也允许用户登录成功
-      ElMessage.success('登录成功')
-      router.push({ path: '/stocks-front/home' }) // 跳转到前台首页
+  ElMessage.success('登录成功')
+  router.push({ path: '/stocks-front/home' }) // 跳转到前台首页
     })
   }, 300) // 延迟300ms
 }

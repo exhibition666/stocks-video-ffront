@@ -6,6 +6,7 @@ import { CACHE_KEY, useCache } from '@/hooks/web/useCache'
 import routerSearch from '@/components/RouterSearch/index.vue'
 import { onMounted, onUnmounted } from 'vue'
 import { setupAuthDebugger } from '@/utils/authDebugger'
+import { useUserStore } from '@/store/modules/user'
 
 defineOptions({ name: 'APP' })
 
@@ -33,6 +34,17 @@ onMounted(() => {
   // 启动登录状态调试器
   cleanupAuthDebugger = setupAuthDebugger()
   console.log('全局登录状态调试已启动')
+
+  // 自动同步 wsCache 到 userStore，保证刷新后登录态恢复
+  const userStore = useUserStore()
+  if (!userStore.user && wsCache.get(CACHE_KEY.USER)) {
+    // 只同步一次，避免覆盖已登录的 store
+    const userInfo = wsCache.get(CACHE_KEY.USER)
+    userStore.user = userInfo.user
+    userStore.isSetUser = true
+    userStore.roles = userInfo.roles || []
+    userStore.permissions = new Set(userInfo.permissions || [])
+  }
 })
 
 onUnmounted(() => {

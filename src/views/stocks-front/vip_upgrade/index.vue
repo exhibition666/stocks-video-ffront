@@ -2,138 +2,156 @@
   <div class="vip-bg">
     <StocksHeader />
     <div class="vip-cards vip-content">
-      <div v-for="(item, idx) in vipList" :key="idx" class="vip-card">
-        <div class="vip-title">{{ item.title }}</div>
+      <div v-for="item in vipList" :key="item.id" class="vip-card">
+        <div class="vip-title">{{ item.name }}</div>
         <div class="vip-tags">
-          <span v-for="(tag, i) in item.tags" :key="i" class="vip-tag" :class="tag.type">{{ tag.text }}</span>
+          <span v-if="item.remark" class="vip-tag hot">{{ item.remark }}</span>
+          <span v-if="item.vipType === VipTypeEnum.MONTH" class="vip-tag">月卡</span>
+          <span v-if="item.vipType === VipTypeEnum.YEAR" class="vip-tag">年卡</span>
+          <span v-if="item.vipType === VipTypeEnum.FOREVER" class="vip-tag warn">永久</span>
         </div>
-        <div class="vip-price">￥{{ item.price }}</div>
+        <div class="vip-price">￥{{ Number(item.price).toFixed(2) }}</div>
         <div class="vip-tip">此商品无限制购买</div>
         <div class="vip-info-row">
-          <span>会员级别</span>
-          <span>{{ item.level }}</span>
+          <span>VIP类型</span>
+          <span>{{ formatVipType(item.vipType) }}</span>
         </div>
         <div class="vip-info-row">
-          <span>等级时长</span>
-          <span>{{ item.duration }}</span>
+          <span>有效期</span>
+          <span>{{ formatDuration(item.duration, item.vipType) }}</span>
         </div>
-        <div class="vip-info-row">
-          <span>流量额度</span>
-          <span>{{ item.traffic }}</span>
-        </div>
-        <div class="vip-info-row">
-          <span>到期限制</span>
-          <span>{{ item.expire }}</span>
-        </div>
-        <div class="vip-info-row">
-          <span>同时在线</span>
-          <span>{{ item.devices }}</span>
-        </div>
-        <div class="vip-info-row">
-          <span>描述</span>
-          <span></span>
-        </div>
-        <ul class="vip-desc">
-          <li v-for="(desc, i) in item.descList" :key="i">{{ desc }}</li>
-        </ul>
-        <el-button type="primary" class="vip-btn" size="large">购买</el-button>
+        <el-button
+          type="primary"
+          class="vip-btn"
+          size="large"
+          @click="handlePurchase(item)"
+          :loading="purchaseLoading === item.id"
+          >购买</el-button
+        >
       </div>
     </div>
+
+    <!-- 支付方式选择弹窗 -->
+    <el-dialog
+      v-model="payDialogVisible"
+      title="选择支付方式"
+      width="400px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <div class="pay-method-list">
+        <div
+          v-for="method in payMethods"
+          :key="method.value"
+          class="pay-method-item"
+          :class="{ active: selectedPayMethod === method.value }"
+          @click="selectedPayMethod = method.value"
+        >
+          <i :class="method.icon"></i>
+          <span>{{ method.label }}</span>
+        </div>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="payDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="confirmPurchase" :loading="confirmLoading">
+            确认支付
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import StocksHeader from '@/components/StocksHeader/index.vue'
-const vipList = [
-  {
-    title: '家宽限时特惠',
-    tags: [
-      { text: '买2年送半年', type: 'hot' },
-      { text: '限时', type: 'warn' },
-      { text: '买3年送1年', type: 'hot' },
-      { text: '限量50天', type: 'warn' }
-    ],
-    price: 398.00,
-    level: '高级家宽',
-    duration: '1095天',
-    traffic: '无限流量',
-    expire: '30天重置',
-    devices: '2个设备',
-    descList: [
-      '特惠3年钻石套餐',
-      '包含所有家宽和国际节点',
-      '全站所有线路均可使用',
-      '无限流量不限网速',
-      '可同时2个设备在线',
-      '快速响应',
-    ]
-  },
-  {
-    title: '中级套餐',
-    tags: [
-      { text: '包月', type: 'main' },
-      { text: '包半年', type: 'main' },
-      { text: '包一年', type: 'main' }
-    ],
-    price: 12.00,
-    level: '中级国际',
-    duration: '30天',
-    traffic: '无限流量',
-    expire: '30天重置',
-    devices: '2个设备',
-    descList: [
-      'IPLC广新专线',
-      '无限流量不限网速',
-      '可同时2个设备在线',
-      '全球节点分布',
-      '快速客服响应',
-    ]
-  },
-  {
-    title: '家宽套餐[港台]',
-    tags: [
-      { text: '包月', type: 'main' },
-      { text: '包半年', type: 'main' },
-      { text: '包一年', type: 'main' }
-    ],
-    price: 21.00,
-    level: '高级家宽',
-    duration: '30天',
-    traffic: '无限流量',
-    expire: '30天重置',
-    devices: '2个设备',
-    descList: [
-      'IEPL广港专线',
-      '海外本地家庭宽带',
-      'ChatGPT/Netflix/Disney/TVB等全都支持',
-      '香港宽带/台湾中华电信',
-      '家宽高雅回国延迟新加坡',
-      '无限流量不限速',
-      '可同时2个设备在线',
-      '快速客服响应',
-    ]
-  },
-  {
-    title: 'Tik Tok直播专线',
-    tags: [
-      { text: '独享直播专线', type: 'hot' },
-      { text: '跨境专业服务', type: 'warn' }
-    ],
-    price: 1500.00,
-    level: '合伙人',
-    duration: '30天',
-    traffic: '无限流量',
-    expire: '30天重置',
-    devices: '无限制',
-    descList: [
-      '独享国际直播专线',
-      '可选100M 300M 500M 1000M',
-      '真实原生IP 海外5G网络加持',
-      '不限设备在线',
-      '需定制请联系客户',
-    ]
-  }
+import { ref, onMounted } from 'vue'
+import { getVipPackageList, buyVipPackage } from '@/api/member/vip-package'
+import { VipPackage, VipTypeEnum, PayTypeEnum } from '@/api/member/vip-package/types'
+import { useRouter } from 'vue-router'
+import { useMessage } from '@/hooks/web/useMessage'
+import { useUserStore } from '@/store/modules/user'
+import { getAccessToken } from '@/utils/auth'
+
+const router = useRouter()
+const message = useMessage()
+const userStore = useUserStore()
+const vipList = ref<VipPackage[]>([])
+const loading = ref(false)
+const purchaseLoading = ref<number | null>(null)
+const payDialogVisible = ref(false)
+const selectedPayMethod = ref<string>(PayTypeEnum.WECHAT)
+const confirmLoading = ref(false)
+const currentPackage = ref<VipPackage | null>(null)
+
+// 支付方式列表
+const payMethods = [
+  { label: '微信支付', value: PayTypeEnum.WECHAT, icon: 'el-icon-wechat' },
+  { label: '支付宝', value: PayTypeEnum.ALIPAY, icon: 'el-icon-alipay' }
 ]
+
+// 格式化VIP类型
+const formatVipType = (type: string) => {
+  switch (type) {
+    case VipTypeEnum.MONTH:
+      return '月卡'
+    case VipTypeEnum.YEAR:
+      return '年卡'
+    case VipTypeEnum.FOREVER:
+      return '永久'
+    default:
+      return type
+  }
+}
+
+// 格式化时长显示
+const formatDuration = (duration: number, type: string) => {
+  if (type === VipTypeEnum.FOREVER) {
+    return '永久有效'
+  }
+  return `${duration}天`
+}
+
+// 获取VIP套餐列表
+const fetchVipList = async () => {
+  loading.value = true
+  try {
+    const res = await getVipPackageList()
+    vipList.value = res || []
+  } finally {
+    loading.value = false
+  }
+}
+
+// 点击购买按钮
+const handlePurchase = async (item: VipPackage) => {
+  if (!getAccessToken()) {
+    message.error('请先登录再进行购买')
+    await router.push({ path: '/stocks-front/login', query: { redirect: router.currentRoute.value.fullPath } })
+    return
+  }
+  
+  currentPackage.value = item
+  payDialogVisible.value = true
+}
+
+// 确认购买
+const confirmPurchase = async () => {
+  if (!currentPackage.value) return
+  payDialogVisible.value = false
+  // 跳转到收银台页面，传递套餐id和支付方式
+  await router.push({
+    path: '/stocks-front/pay/cashier',
+    query: {
+      packageId: currentPackage.value.id,
+      payType: selectedPayMethod.value
+    }
+  })
+}
+
+onMounted(() => {
+  fetchVipList()
+})
 </script>
 
 <style scoped lang="scss">
@@ -223,5 +241,39 @@ const vipList = [
   font-size: 16px;
   border-radius: 8px;
   margin-top: 8px;
+}
+
+/* 支付方式选择样式 */
+.pay-method-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pay-method-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  cursor: pointer;
+  transition: all 0.2s;
+  
+  &:hover {
+    border-color: #3a5cff;
+  }
+  
+  &.active {
+    border-color: #3a5cff;
+    background-color: #f5f8ff;
+  }
+  
+  i {
+    font-size: 24px;
+    margin-right: 12px;
+  }
+  
+  span {
+    font-size: 16px;
+  }
 }
 </style>

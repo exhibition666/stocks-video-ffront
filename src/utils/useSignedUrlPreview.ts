@@ -18,7 +18,7 @@ export function useSignedUrlPreview() {
    */
   const fetchSignedUrl = async (filePath: string, isVideo = false) => {
     if (!filePath) {
-      signedUrl.value = ''
+    signedUrl.value = ''
       return ''
     }
 
