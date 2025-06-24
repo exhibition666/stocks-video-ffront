@@ -8,6 +8,14 @@ export const getVipPackageList = () => {
 }
 
 /**
+ * 获取VIP订单记录
+ * @param params 分页参数
+ */
+export const getVipPackageOrderPage = (params: any) => {
+  return request.get({ url: '/member/vip-order/page', params })
+}
+
+/**
  * VIP套餐支付参数
  */
 export interface VipPackageBuyParams {

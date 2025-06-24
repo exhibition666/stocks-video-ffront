@@ -20,46 +20,20 @@
           <span>有效期</span>
           <span>{{ formatDuration(item.duration, item.vipType) }}</span>
         </div>
+        <div class="vip-info-row">
+          <span>支付方式</span>
+          <span><i class="el-icon-alipay"></i> 支付宝</span>
+        </div>
         <el-button
           type="primary"
           class="vip-btn"
           size="large"
           @click="handlePurchase(item)"
           :loading="purchaseLoading === item.id"
-          >购买</el-button
+          >立即购买</el-button
         >
       </div>
     </div>
-
-    <!-- 支付方式选择弹窗 -->
-    <el-dialog
-      v-model="payDialogVisible"
-      title="选择支付方式"
-      width="400px"
-      :close-on-click-modal="false"
-      destroy-on-close
-    >
-      <div class="pay-method-list">
-        <div
-          v-for="method in payMethods"
-          :key="method.value"
-          class="pay-method-item"
-          :class="{ active: selectedPayMethod === method.value }"
-          @click="selectedPayMethod = method.value"
-        >
-          <i :class="method.icon"></i>
-          <span>{{ method.label }}</span>
-        </div>
-      </div>
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="payDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="confirmPurchase" :loading="confirmLoading">
-            确认支付
-          </el-button>
-        </span>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -79,16 +53,6 @@ const userStore = useUserStore()
 const vipList = ref<VipPackage[]>([])
 const loading = ref(false)
 const purchaseLoading = ref<number | null>(null)
-const payDialogVisible = ref(false)
-const selectedPayMethod = ref<string>(PayTypeEnum.WECHAT)
-const confirmLoading = ref(false)
-const currentPackage = ref<VipPackage | null>(null)
-
-// 支付方式列表
-const payMethods = [
-  { label: '微信支付', value: PayTypeEnum.WECHAT, icon: 'el-icon-wechat' },
-  { label: '支付宝', value: PayTypeEnum.ALIPAY, icon: 'el-icon-alipay' }
-]
 
 // 格式化VIP类型
 const formatVipType = (type: string) => {
@@ -131,22 +95,24 @@ const handlePurchase = async (item: VipPackage) => {
     return
   }
   
-  currentPackage.value = item
-  payDialogVisible.value = true
-}
-
-// 确认购买
-const confirmPurchase = async () => {
-  if (!currentPackage.value) return
-  payDialogVisible.value = false
-  // 跳转到收银台页面，传递套餐id和支付方式
-  await router.push({
-    path: '/stocks-front/pay/cashier',
-    query: {
-      packageId: currentPackage.value.id,
-      payType: selectedPayMethod.value
-    }
-  })
+  purchaseLoading.value = item.id
+  try {
+    // 默认使用支付宝支付
+    const payType = PayTypeEnum.ALIPAY
+    
+    // 直接调用购买API
+    const orderId = await buyVipPackage({ packageId: item.id, payType })
+    
+    // 跳转到收银台页面
+    await router.push({
+      path: '/stocks-front/pay/cashier',
+      query: { id: orderId }
+    })
+  } catch (error: any) {
+    message.error(error?.msg || '下单失败')
+  } finally {
+    purchaseLoading.value = null
+  }
 }
 
 onMounted(() => {
@@ -227,6 +193,11 @@ onMounted(() => {
   font-size: 14px;
   color: #333;
   margin-bottom: 2px;
+  
+  i {
+    color: #1677FF;
+    margin-right: 4px;
+  }
 }
 .vip-desc {
   margin: 10px 0 18px 0;
@@ -240,40 +211,6 @@ onMounted(() => {
   width: 100%;
   font-size: 16px;
   border-radius: 8px;
-  margin-top: 8px;
-}
-
-/* 支付方式选择样式 */
-.pay-method-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.pay-method-item {
-  display: flex;
-  align-items: center;
-  padding: 12px 16px;
-  border-radius: 8px;
-  border: 1px solid #e0e0e0;
-  cursor: pointer;
-  transition: all 0.2s;
-  
-  &:hover {
-    border-color: #3a5cff;
-  }
-  
-  &.active {
-    border-color: #3a5cff;
-    background-color: #f5f8ff;
-  }
-  
-  i {
-    font-size: 24px;
-    margin-right: 12px;
-  }
-  
-  span {
-    font-size: 16px;
-  }
+  margin-top: 16px;
 }
 </style>

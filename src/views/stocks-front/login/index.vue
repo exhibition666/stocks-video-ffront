@@ -8,11 +8,25 @@
       <MemberLoginForm />
       </div>
       <div class="login-right">
-        <div class="welcome-title">欢迎您 来到<br/>Nine Nine Six Network!</div>
+        <div class="welcome-title">欢迎来到<br/>股票视频学习平台</div>
         <div class="welcome-desc">
-          加密级的财富管家，24小时不停不休<br/>
-          自持独立负载高峰，稳定快速兼容认证<br/>
-          AI人工智能定制投资，好服务为科技加持
+          海量专业股票视频教程，助您掌握投资技巧<br/>
+          专家实时解盘，捕捉市场机会<br/>
+          AI智能选股推荐，提升投资决策效率
+        </div>
+        <div class="features">
+          <div class="feature-item">
+            <i class="el-icon-video-camera"></i>
+            <span>专业教学</span>
+          </div>
+          <div class="feature-item">
+            <i class="el-icon-data-analysis"></i>
+            <span>市场分析</span>
+          </div>
+          <div class="feature-item">
+            <i class="el-icon-cpu"></i>
+            <span>AI助手</span>
+          </div>
         </div>
       </div>
     </div>
@@ -68,7 +82,7 @@ watch(
 .#{$namespace}-login-bg {
   min-height: 100vh;
   width: 100vw;
-  background: linear-gradient(120deg, #f6d365 0%, #fda085 50%, #a1c4fd 100%);
+  background: linear-gradient(120deg, #1a2980 0%, #26d0ce 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -76,10 +90,10 @@ watch(
 .login-card {
   display: flex;
   width: 900px;
-  min-height: 480px;
+  min-height: 500px;
   background: #fff;
   border-radius: 24px;
-  box-shadow: 0 4px 32px 0 rgba(0,0,0,0.08);
+  box-shadow: 0 10px 50px 0 rgba(0,0,0,0.15);
   overflow: hidden;
 }
 .login-left {
@@ -95,14 +109,18 @@ watch(
   width: 72px;
   height: 72px;
   margin-bottom: 24px;
+  animation: pulse 2s infinite;
 }
 .login-title {
   font-size: 28px;
   font-weight: bold;
   margin-bottom: 8px;
+  background: linear-gradient(to right, #1a2980, #26d0ce);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 .login-desc {
-  color: #888;
+  color: #666;
   margin-bottom: 32px;
 }
 .login-right {
@@ -111,22 +129,101 @@ watch(
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%);
+  background: linear-gradient(135deg, #1a2980 0%, #26d0ce 100%);
+  padding: 0 24px;
+  position: relative;
+  overflow: hidden;
+  
+  &::before {
+    content: "";
+    position: absolute;
+    top: -50px;
+    right: -50px;
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.1);
+    z-index: 0;
+  }
+  
+  &::after {
+    content: "";
+    position: absolute;
+    bottom: -50px;
+    left: -50px;
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.1);
+    z-index: 0;
+  }
 }
 .welcome-title {
   font-size: 32px;
   font-weight: bold;
-  color: #333;
+  color: #ffffff;
   margin-bottom: 24px;
   text-align: center;
   line-height: 1.3;
+  position: relative;
+  z-index: 1;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 .welcome-desc {
-  color: #666;
+  color: rgba(255,255,255,0.9);
   font-size: 16px;
   text-align: center;
   line-height: 2;
+  margin-bottom: 32px;
+  position: relative;
+  z-index: 1;
 }
+.features {
+  display: flex;
+  justify-content: space-around;
+  width: 100%;
+  margin-top: 20px;
+  position: relative;
+  z-index: 1;
+}
+.feature-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: white;
+  padding: 15px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.1);
+  transition: all 0.3s ease;
+  
+  i {
+    font-size: 24px;
+    margin-bottom: 8px;
+  }
+  
+  span {
+    font-size: 14px;
+  }
+  
+  &:hover {
+    transform: translateY(-5px);
+    background: rgba(255,255,255,0.2);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 @media (max-width: 900px) {
   .login-card {
     flex-direction: column;
@@ -134,10 +231,16 @@ watch(
     min-width: 320px;
   }
   .login-left, .login-right {
-    padding: 32px 12px;
+    padding: 32px 16px;
   }
   .welcome-title {
-    font-size: 22px;
+    font-size: 24px;
+  }
+  .features {
+    flex-wrap: wrap;
+  }
+  .feature-item {
+    margin-bottom: 10px;
   }
 }
 </style>

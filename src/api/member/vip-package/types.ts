@@ -19,6 +19,26 @@ export interface VipPackage {
 }
 
 /**
+ * VIP订单记录类型
+ */
+export interface VipPackageOrderVO {
+  /** 订单编号 */
+  id: number
+  /** VIP套餐ID */
+  packageId: number
+  /** 套餐名称 */
+  packageName: string
+  /** 价格（元） */
+  price: number
+  /** 订单状态：0-未支付，1-已支付，2-已取消 */
+  status: number
+  /** 支付时间 */
+  payTime: string
+  /** 创建时间 */
+  createTime: string
+}
+
+/**
  * VIP类型枚举
  */
 export enum VipTypeEnum {

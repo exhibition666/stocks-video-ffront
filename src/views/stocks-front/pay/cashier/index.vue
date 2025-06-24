@@ -20,101 +20,39 @@
         </el-descriptions>
       </el-card>
 
-      <!-- 支付选择框 -->
-      <el-card style="margin-top: 10px" v-loading="submitLoading" element-loading-text="提交支付中...">
-        <!-- 支付宝 -->
-        <el-descriptions title="选择支付宝支付" />
-        <div class="pay-channel-container">
-          <div
-            class="box"
-            v-for="channel in channelsAlipay"
-            :key="channel.code"
-            @click="submit(channel.code)"
-          >
-            <img :src="channel.icon" />
-            <div class="title">{{ channel.name }}</div>
+      <!-- 支付宝扫码支付区域 -->
+      <el-card v-if="!qrCodeUrl" style="margin-top: 20px" v-loading="submitLoading" element-loading-text="生成支付二维码中...">
+        <div class="qr-container">
+          <div class="qr-title">
+            <img :src="svg_alipay_qr" alt="支付宝扫码支付" class="qr-icon" />
+            <span>请使用支付宝扫码完成支付</span>
           </div>
-        </div>
-        <!-- 微信支付 -->
-        <el-descriptions title="选择微信支付" style="margin-top: 20px" />
-        <div class="pay-channel-container">
-          <div
-            class="box"
-            v-for="channel in channelsWechat"
-            :key="channel.code"
-            @click="submit(channel.code)"
-          >
-            <img :src="channel.icon" />
-            <div class="title">{{ channel.name }}</div>
-          </div>
-        </div>
-        <!-- 其它支付 -->
-        <el-descriptions title="选择其它支付" style="margin-top: 20px" />
-        <div class="pay-channel-container">
-          <div
-            class="box"
-            v-for="channel in channelsMock"
-            :key="channel.code"
-            @click="submit(channel.code)"
-          >
-            <img :src="channel.icon" />
-            <div class="title">{{ channel.name }}</div>
-          </div>
+          <el-button type="primary" @click="generateQrCode" :loading="submitLoading" size="large">
+            生成支付二维码
+          </el-button>
         </div>
       </el-card>
 
-      <!-- 展示形式：二维码 URL -->
-      <Dialog
-        :title="qrCode.title"
-        v-model="qrCode.visible"
-        width="350px"
-        append-to-body
-        :close-on-press-escape="false"
-      >
-        <Qrcode :text="qrCode.url" :width="310" />
-      </Dialog>
-
-      <!-- 展示形式：BarCode 条形码 -->
-      <Dialog
-        :title="barCode.title"
-        v-model="barCode.visible"
-        width="500px"
-        append-to-body
-        :close-on-press-escape="false"
-      >
-        <el-form ref="form" label-width="80px">
-          <el-row>
-            <el-col :span="24">
-              <el-form-item label="条形码" prop="name">
-                <el-input v-model="barCode.value" placeholder="请输入条形码" required />
-              </el-form-item>
-            </el-col>
-            <el-col :span="24">
-              <div style="text-align: right">
-                或使用
-                <el-link
-                  type="danger"
-                  target="_blank"
-                  href="https://baike.baidu.com/item/条码支付/10711903"
-                >
-                  (扫码枪/扫码盒)
-                </el-link>
-                扫码
-              </div>
-            </el-col>
-          </el-row>
-        </el-form>
-        <template #footer>
-          <el-button
-            type="primary"
-            @click="submit0(barCode.channelCode)"
-            :disabled="barCode.value.length === 0"
-          >
-            确认支付
+      <!-- 显示支付宝二维码 -->
+      <el-card v-else style="margin-top: 20px">
+        <div class="qr-container">
+          <div class="qr-title">
+            <img :src="svg_alipay_qr" alt="支付宝扫码支付" class="qr-icon" />
+            <span>请使用支付宝扫码完成支付</span>
+          </div>
+          <div class="qr-code-wrapper">
+            <Qrcode :text="qrCodeUrl" :width="200" />
+          </div>
+          <div class="qr-tips">
+            <p>1. 打开支付宝APP</p>
+            <p>2. 点击右上角"+"号，选择"扫一扫"</p>
+            <p>3. 扫描上方二维码完成支付</p>
+          </div>
+          <el-button type="primary" @click="refreshQrCode" :loading="submitLoading" size="large">
+            刷新二维码
           </el-button>
-          <el-button @click="barCode.visible = false">取 消</el-button>
-        </template>
-      </Dialog>
+        </div>
+      </el-card>
     </div>
   </div>
 </template>
@@ -130,21 +68,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { buyVipPackage } from '@/api/member/vip-package'
 import { PayTypeEnum } from '@/api/member/vip-package/types'
 import { useUserStore } from '@/store/modules/user'
-import { watch } from 'vue'
+import { watch, ref } from 'vue'
 
-// 导入图标
-import svg_alipay_pc from '@/assets/svgs/pay/icon/alipay_pc.svg'
-import svg_alipay_wap from '@/assets/svgs/pay/icon/alipay_wap.svg'
-import svg_alipay_app from '@/assets/svgs/pay/icon/alipay_app.svg'
+// 导入支付宝扫码图标
 import svg_alipay_qr from '@/assets/svgs/pay/icon/alipay_qr.svg'
-import svg_alipay_bar from '@/assets/svgs/pay/icon/alipay_bar.svg'
-import svg_wx_pub from '@/assets/svgs/pay/icon/wx_pub.svg'
-import svg_wx_lite from '@/assets/svgs/pay/icon/wx_lite.svg'
-import svg_wx_app from '@/assets/svgs/pay/icon/wx_app.svg'
-import svg_wx_native from '@/assets/svgs/pay/icon/wx_native.svg'
-import svg_wx_bar from '@/assets/svgs/pay/icon/wx_bar.svg'
-import svg_wallet from '@/assets/svgs/pay/icon/wallet.svg'
-import svg_mock from '@/assets/svgs/pay/icon/mock.svg'
 
 defineOptions({ name: 'PayCashier' })
 
@@ -158,88 +85,9 @@ const id = ref(undefined) // 支付单号
 const returnUrl = ref<string | undefined>(undefined) // 支付完的回调地址
 const loading = ref(false) // 支付信息的 loading
 const payOrder = ref({}) // 支付信息
-const channelsAlipay = [
-  {
-    name: '支付宝 PC 网站支付',
-    icon: svg_alipay_pc,
-    code: 'alipay_pc'
-  },
-  {
-    name: '支付宝 Wap 网站支付',
-    icon: svg_alipay_wap,
-    code: 'alipay_wap'
-  },
-  {
-    name: '支付宝 App 网站支付',
-    icon: svg_alipay_app,
-    code: 'alipay_app'
-  },
-  {
-    name: '支付宝扫码支付',
-    icon: svg_alipay_qr,
-    code: 'alipay_qr'
-  },
-  {
-    name: '支付宝条码支付',
-    icon: svg_alipay_bar,
-    code: 'alipay_bar'
-  }
-]
-const channelsWechat = [
-  {
-    name: '微信公众号支付',
-    icon: svg_wx_pub,
-    code: 'wx_pub'
-  },
-  {
-    name: '微信小程序支付',
-    icon: svg_wx_lite,
-    code: 'wx_lite'
-  },
-  {
-    name: '微信 App 支付',
-    icon: svg_wx_app,
-    code: 'wx_app'
-  },
-  {
-    name: '微信扫码支付',
-    icon: svg_wx_native,
-    code: 'wx_native'
-  },
-  {
-    name: '微信条码支付',
-    icon: svg_wx_bar,
-    code: 'wx_bar'
-  }
-]
-const channelsMock = [
-  {
-    name: '钱包支付',
-    icon: svg_wallet,
-    code: 'wallet'
-  },
-  {
-    name: '模拟支付',
-    icon: svg_mock,
-    code: 'mock'
-  }
-]
-
 const submitLoading = ref(false) // 提交支付的 loading
 const interval = ref<any>(undefined) // 定时任务，轮询是否完成支付
-const qrCode = ref({
-  // 展示形式：二维码
-  url: '',
-  title: '',
-  visible: false
-})
-const barCode = ref({
-  // 展示形式：条形码
-  channelCode: '',
-  value: '',
-  title: '',
-  visible: false
-})
+const qrCodeUrl = ref('') // 支付宝扫码支付的二维码URL
 
 /** 获得支付信息 */
 const getDetail = async () => {
@@ -251,23 +99,23 @@ const getDetail = async () => {
   }
   loading.value = true
   try {
-  const data = await PayOrderApi.getOrder(id.value, true)
-  payOrder.value = data
-  // 1.2 无法查询到支付信息
-  if (!data) {
-    message.error('支付订单不存在，请检查！')
-    goReturnUrl('cancel')
-    return
-  }
-  // 1.3 如果已支付、或者已关闭，则直接跳转
-  if (data.status === PayOrderStatusEnum.SUCCESS.status) {
-    message.success('支付成功')
-    goReturnUrl('success')
-    return
-  } else if (data.status === PayOrderStatusEnum.CLOSED.status) {
-    message.error('无法支付，原因：订单已关闭')
-    goReturnUrl('close')
-    return
+    const data = await PayOrderApi.getOrder(id.value, true)
+    payOrder.value = data
+    // 1.2 无法查询到支付信息
+    if (!data) {
+      message.error('支付订单不存在，请检查！')
+      goReturnUrl('cancel')
+      return
+    }
+    // 1.3 如果已支付、或者已关闭，则直接跳转
+    if (data.status === PayOrderStatusEnum.SUCCESS.status) {
+      message.success('支付成功')
+      goReturnUrl('success')
+      return
+    } else if (data.status === PayOrderStatusEnum.CLOSED.status) {
+      message.error('无法支付，原因：订单已关闭')
+      goReturnUrl('close')
+      return
     }
   } catch (error: any) {
     message.error(error?.msg || '获取支付信息失败')
@@ -277,131 +125,47 @@ const getDetail = async () => {
   }
 }
 
-/** 提交支付 */
-const submit = (channelCode) => {
-  // 条形码支付，需要特殊处理
-  if (channelCode === PayChannelEnum.ALIPAY_BAR.code) {
-    barCode.value = {
-      channelCode: channelCode,
-      value: '',
-      title: '“支付宝”条码支付',
-      visible: true
-    }
-    return
-  }
-  if (channelCode === PayChannelEnum.WX_BAR.code) {
-    barCode.value = {
-      channelCode: channelCode,
-      value: '',
-      title: '“微信”条码支付',
-      visible: true
-    }
-    return
-  }
-
-  // 微信公众号、小程序支付，无法在 PC 网页中进行
-  if (channelCode === PayChannelEnum.WX_PUB.code) {
-    message.error('微信公众号支付：不支持 PC 网站')
-    return
-  }
-  if (channelCode === PayChannelEnum.WX_LITE.code) {
-    message.error('微信小程序：不支持 PC 网站')
-    return
-  }
-
-  // 默认的提交处理
-  submit0(channelCode)
-}
-
-const submit0 = async (channelCode) => {
+/** 生成支付宝扫码支付二维码 */
+const generateQrCode = async () => {
   submitLoading.value = true
   try {
     const formData = {
       id: id.value,
-      channelCode: channelCode,
-      returnUrl: location.href, // 支付成功后，支付渠道跳转回当前页；再由当前页，跳转回 {@link returnUrl} 对应的地址
-      ...buildSubmitParam(channelCode)
+      channelCode: PayChannelEnum.ALIPAY_QR.code,
+      returnUrl: location.href // 支付成功后，支付渠道跳转回当前页；再由当前页，跳转回 returnUrl 对应的地址
     }
     const data = await PayOrderApi.submitOrder(formData)
-    // 直接返回已支付的情况，例如说扫码支付
+    
+    // 直接返回已支付的情况
     if (data.status === PayOrderStatusEnum.SUCCESS.status) {
-      clearQueryInterval()
       await userStore.setMemberInfo()
       message.success('支付成功！')
       goReturnUrl('success')
       return
     }
 
-    // 展示对应的界面
-    if (data.displayMode === PayDisplayModeEnum.URL.mode) {
-      displayUrl(channelCode, data)
-    } else if (data.displayMode === PayDisplayModeEnum.QR_CODE.mode) {
-      displayQrCode(channelCode, data)
-    } else if (data.displayMode === PayDisplayModeEnum.APP.mode) {
-      displayApp(channelCode)
+    // 展示二维码
+    if (data.displayMode === PayDisplayModeEnum.QR_CODE.mode) {
+      qrCodeUrl.value = data.displayContent
+      
+      // 打开轮询任务
+      createQueryInterval()
+    } else {
+      message.error('生成支付二维码失败，请刷新页面重试')
     }
-
-    // 打开轮询任务
-    createQueryInterval()
+  } catch (error: any) {
+    message.error(error?.msg || '生成支付二维码失败')
   } finally {
     submitLoading.value = false
   }
 }
 
-/** 构建提交支付的额外参数 */
-const buildSubmitParam = (channelCode) => {
-  // ① 支付宝 BarCode 支付时，需要传递 authCode 条形码
-  if (channelCode === PayChannelEnum.ALIPAY_BAR.code) {
-    return {
-      channelExtras: {
-        auth_code: barCode.value.value
-      }
-    }
-  }
-  // ② 微信 BarCode 支付时，需要传递 authCode 条形码
-  if (channelCode === PayChannelEnum.WX_BAR.code) {
-    return {
-      channelExtras: {
-        authCode: barCode.value.value
-      }
-    }
-  }
-  return {}
-}
-
-/** 提交支付后，URL 的展示形式 */
-const displayUrl = (_channelCode, data) => {
-  location.href = data.displayContent
-  submitLoading.value = false
-}
-
-/** 提交支付后（扫码支付） */
-const displayQrCode = (channelCode, data) => {
-  let title = '请使用手机浏览器"扫一扫"'
-  if (channelCode === PayChannelEnum.ALIPAY_WAP.code) {
-    // 考虑到 WAP 测试，所以引导手机浏览器搞
-  } else if (channelCode.indexOf('alipay_') === 0) {
-    title = '请使用支付宝"扫一扫"扫码支付'
-  } else if (channelCode.indexOf('wx_') === 0) {
-    title = '请使用微信"扫一扫"扫码支付'
-  }
-  qrCode.value = {
-    title: title,
-    url: data.displayContent,
-    visible: true
-  }
-  submitLoading.value = false
-}
-
-/** 提交支付后（App） */
-const displayApp = (channelCode) => {
-  if (channelCode === PayChannelEnum.ALIPAY_APP.code) {
-    message.error('支付宝 App 支付：无法在网页支付！')
-  }
-  if (channelCode === PayChannelEnum.WX_APP.code) {
-    message.error('微信 App 支付：无法在网页支付！')
-  }
-  submitLoading.value = false
+/** 刷新二维码 */
+const refreshQrCode = () => {
+  qrCodeUrl.value = ''
+  setTimeout(() => {
+    generateQrCode()
+  }, 100)
 }
 
 /** 轮询查询任务 */
@@ -412,19 +176,19 @@ const createQueryInterval = () => {
   interval.value = setInterval(async () => {
     try {
       const data = await PayOrderApi.getOrder(id.value, true)
-    // 已支付
-    if (data.status === PayOrderStatusEnum.SUCCESS.status) {
-      clearQueryInterval()
+      // 已支付
+      if (data.status === PayOrderStatusEnum.SUCCESS.status) {
+        clearQueryInterval()
         await userStore.setMemberInfo()
-      message.success('支付成功！')
-      goReturnUrl('success')
+        message.success('支付成功！')
+        goReturnUrl('success')
         return
-    }
+      }
       // 已取消或关闭
-    if (data.status === PayOrderStatusEnum.CLOSED.status) {
-      clearQueryInterval()
-      message.error('支付已关闭！')
-      goReturnUrl('close')
+      if (data.status === PayOrderStatusEnum.CLOSED.status) {
+        clearQueryInterval()
+        message.error('支付已关闭！')
+        goReturnUrl('close')
         return
       }
     } catch (error: any) {
@@ -437,13 +201,6 @@ const createQueryInterval = () => {
 
 /** 清空查询任务 */
 const clearQueryInterval = () => {
-  // 清空各种弹窗
-  qrCode.value = {
-    title: '',
-    url: '',
-    visible: false
-  }
-  // 清空任务
   clearInterval(interval.value)
   interval.value = undefined
 }
@@ -468,8 +225,8 @@ const goReturnUrl = (payResult) => {
 
   // 构建返回URL
   const url = returnUrl.value.indexOf('?') >= 0
-      ? returnUrl.value + '&payResult=' + payResult
-      : returnUrl.value + '?payResult=' + payResult
+    ? returnUrl.value + '&payResult=' + payResult
+    : returnUrl.value + '?payResult=' + payResult
 
   // 如果是外部链接，则浏览器跳转
   if (returnUrl.value.indexOf('http') === 0) {
@@ -480,7 +237,7 @@ const goReturnUrl = (payResult) => {
   }
 }
 
-/** 新增：自动下单逻辑 */
+/** 自动下单逻辑 */
 onMounted(async () => {
   // 如果url带有packageId和payType，自动下单
   const packageId = route.query.packageId
@@ -505,7 +262,7 @@ onMounted(async () => {
     returnUrl.value = decodeURIComponent(route.query.returnUrl as string)
   }
   getDetail()
-})
+}),
 
 onUnmounted(() => {
   clearQueryInterval()
@@ -533,27 +290,47 @@ watch(
   margin: 0 auto;
   padding-top: 80px;
 }
-.pay-channel-container {
+.qr-container {
   display: flex;
-  margin-top: -10px;
-
-  .box {
-    width: 160px;
-    padding-top: 10px;
-    padding-bottom: 5px;
+  flex-direction: column;
+  align-items: center;
+  padding: 30px 20px;
+}
+.qr-title {
+  display: flex;
+  align-items: center;
+  margin-bottom: 30px;
+  
+  .qr-icon {
+    width: 40px;
+    height: 40px;
     margin-right: 10px;
-    text-align: center;
-    cursor: pointer;
-    border: 1px solid #e6ebf5;
-
-    img {
-      width: 40px;
-      height: 40px;
-    }
-
-    .title {
-      padding-top: 5px;
-    }
+  }
+  
+  span {
+    font-size: 18px;
+    font-weight: 500;
+    color: #333;
+  }
+}
+.qr-code-wrapper {
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+}
+.qr-tips {
+  margin: 20px 0 30px;
+  padding: 15px 25px;
+  background: #f7f9ff;
+  border-radius: 8px;
+  width: 80%;
+  
+  p {
+    margin: 8px 0;
+    color: #666;
+    font-size: 14px;
   }
 }
 </style>

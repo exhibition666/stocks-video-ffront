@@ -11,6 +11,7 @@ import { useLockStore } from '@/store/modules/lock'
 import { useI18n } from '@/hooks/web/useI18n'
 import { useRouter } from 'vue-router'
 import { Icon } from '@/components/Icon'
+import { resetActivityTimer } from '@/utils/userActivity'
 
 defineOptions({ name: 'StocksUserInfo' })
 
@@ -28,7 +29,6 @@ const prefixCls = getPrefixCls('user-info')
 
 const avatar = computed(() => userStore.user?.avatar || avatarImg)
 const userName = computed(() => userStore.user?.nickname ?? 'Admin')
-const levelName = computed(() => userStore.user?.level?.name || '')
 
 // 锁定屏幕
 const lockStore = useLockStore()
@@ -40,9 +40,9 @@ const lockScreen = () => {
 
 const loginOut = async () => {
   try {
-    await ElMessageBox.confirm(t('common.loginOutMessage'), t('common.reminder'), {
-      confirmButtonText: t('common.ok'),
-      cancelButtonText: t('common.cancel'),
+    await ElMessageBox.confirm('确定要退出登录吗？', '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
       type: 'warning'
     })
     await userStore.loginOut()
@@ -53,37 +53,33 @@ const loginOut = async () => {
 }
 
 const toUserDetail = () => {
-  console.log('正在跳转到用户详情页') // 添加日志
+  resetActivityTimer()
   router.push('/stocks-front/userDetail')
 }
 
-const toAdminBackend = () => {
-  window.open('http://localhost:8009/index', '_blank')
+// 用户交互处理
+const handleUserInteraction = () => {
+  resetActivityTimer()
 }
 </script>
 
 <template>
-  <ElDropdown class="custom-hover" :class="prefixCls" trigger="click">
-    <div class="flex items-center">
-      <ElAvatar :src="avatar" alt="" class="w-[calc(var(--logo-height)-25px)] rounded-[50%]" />
-      <span class="pl-[5px] text-14px text-[var(--top-header-text-color)] <lg:hidden">
+  <ElDropdown class="custom-hover" :class="prefixCls" trigger="click" @click="handleUserInteraction">
+    <div class="user-avatar-wrapper" @click="handleUserInteraction">
+      <ElAvatar :src="avatar" alt="" class="user-avatar" />
+      <span class="user-name">
         {{ userName }}
       </span>
-      <el-tag v-if="levelName" type="info" effect="dark" class="level-tag ml-2">{{ levelName }}</el-tag>
     </div>
     <template #dropdown>
-      <ElDropdownMenu>
-        <ElDropdownItem @click="toUserDetail">
-          <Icon icon="ep:user" />
+      <ElDropdownMenu class="user-dropdown-menu">
+        <ElDropdownItem @click="toUserDetail" class="dropdown-item">
+          <Icon icon="ep:user" class="dropdown-icon" />
           <div>个人中心</div>
         </ElDropdownItem>
-        <ElDropdownItem @click="toAdminBackend">
-          <Icon icon="ep:setting" />
-          <div>后台管理</div>
-        </ElDropdownItem>
-        <ElDropdownItem divided @click="loginOut">
-          <Icon icon="ep:switch-button" />
-          <div>退出系统</div>
+        <ElDropdownItem divided @click="loginOut" class="dropdown-item">
+          <Icon icon="ep:switch-button" class="dropdown-icon" />
+          <div>退出登录</div>
         </ElDropdownItem>
       </ElDropdownMenu>
     </template>
@@ -106,6 +102,64 @@ const toAdminBackend = () => {
   padding: 6px 16px;
   border-radius: 16px;
 }
+
+.user-avatar-wrapper {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 22px;
+  transition: all 0.3s;
+  
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+  }
+  
+  .user-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .user-name {
+    padding-left: 8px;
+    font-size: 14px;
+    color: #333;
+    max-width: 100px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    
+    @media (max-width: 991px) {
+      display: none;
+    }
+  }
+}
+
+:deep(.user-dropdown-menu) {
+  min-width: 150px;
+  padding: 5px 0;
+  border-radius: 8px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+  
+  .dropdown-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    
+    .dropdown-icon {
+      margin-right: 8px;
+      font-size: 18px;
+    }
+    
+    &:hover {
+      background-color: #f5f7fa;
+    }
+  }
+}
+
 .fade-bottom-enter-active,
 .fade-bottom-leave-active {
   transition:

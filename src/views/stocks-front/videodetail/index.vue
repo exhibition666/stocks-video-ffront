@@ -14,7 +14,6 @@ const route = useRoute()
 const router = useRouter()
 const videoId = ref(Number(route.params.id))
 const OSS_CONFIG_ID = import.meta.env.VITE_OSS_CONFIG_ID
-const isDev = ref(process.env.NODE_ENV === 'development')
 
 const videoData = ref<any>(null)
 const { signedUrl: fullVideoUrl, fetchSignedUrl: fetchFullVideoUrl } = useSignedUrlPreview()
@@ -28,6 +27,39 @@ const playerReady = ref(false)
 const videoElement = ref<HTMLVideoElement | null>(null)
 const trialEnded = ref(false)
 const showUpgradeOverlay = ref(false)
+const isFullScreen = ref(false)
+
+// 全屏控制
+const toggleFullScreen = () => {
+  if (!videoElement.value) return
+  
+  if (!isFullScreen.value) {
+    // 进入全屏
+    if (videoElement.value.requestFullscreen) {
+      videoElement.value.requestFullscreen()
+    } else if ((videoElement.value as any).webkitRequestFullscreen) {
+      (videoElement.value as any).webkitRequestFullscreen()
+    } else if ((videoElement.value as any).msRequestFullscreen) {
+      (videoElement.value as any).msRequestFullscreen()
+    }
+  } else {
+    // 退出全屏
+    if (document.exitFullscreen) {
+      document.exitFullscreen()
+    } else if ((document as any).webkitExitFullscreen) {
+      (document as any).webkitExitFullscreen()
+    } else if ((document as any).msExitFullscreen) {
+      (document as any).msExitFullscreen()
+    }
+  }
+}
+
+// 监听全屏状态变化
+const handleFullscreenChange = () => {
+  isFullScreen.value = !!document.fullscreenElement || 
+                     !!(document as any).webkitFullscreenElement || 
+                     !!(document as any).msFullscreenElement
+}
 
 // 防止视频下载的全局处理
 const setupAntiDownloadProtection = () => {
@@ -55,11 +87,17 @@ const setupAntiDownloadProtection = () => {
   // 添加事件监听器
   document.addEventListener('contextmenu', handleContextMenu);
   document.addEventListener('dragstart', handleDragStart);
+  document.addEventListener('fullscreenchange', handleFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+  document.addEventListener('msfullscreenchange', handleFullscreenChange);
   
   // 组件卸载时移除事件监听器
   onBeforeUnmount(() => {
     document.removeEventListener('contextmenu', handleContextMenu);
     document.removeEventListener('dragstart', handleDragStart);
+    document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.removeEventListener('msfullscreenchange', handleFullscreenChange);
   });
 };
 
@@ -67,7 +105,6 @@ const setupAntiDownloadProtection = () => {
 const isVipUser = computed(() => {
   const levelName = userStore.user?.level?.name || ''
   const isVip = levelName.includes('VIP') || levelName.includes('vip')
-  console.log('当前用户等级:', levelName, '是否VIP:', isVip)
   return isVip
 })
 
@@ -163,7 +200,6 @@ const handleVideoError = () => {
 // 视频加载成功处理
 const handleVideoLoaded = () => {
   playerReady.value = true;
-  console.log('视频加载成功');
 }
 
 // 升级VIP
@@ -211,14 +247,6 @@ const getVideoDetail = async (id: number) => {
     } catch (e) {
       console.error('获取签名URL失败:', e);
     }
-    
-    console.log('视频详情:', {
-      videoData: videoData.value,
-      fullVideoUrl: fullVideoUrl.value,
-      previewVideoUrl: previewVideoUrl.value,
-      coverUrl: coverUrl.value,
-      previewLimit: previewDuration.value
-    });
   } catch (e) {
     if (e && e.toString().includes('401')) {
       errorMsg.value = '未登录，部分视频详情仅登录后可见';
@@ -244,7 +272,6 @@ const getVideoTypeList = async () => {
 }
 
 onMounted(async () => {
-  console.log('组件已挂载');
   // 设置防下载保护
   setupAntiDownloadProtection();
   // 获取数据
@@ -267,7 +294,7 @@ watch(
 <template>
   <div class="video-detail-page">
     <StocksHeader />
-    <div class="video-detail-content">
+    <div class="video-detail-container">
       <template v-if="loading">
         <div class="loading-container">
           <el-skeleton :rows="6" animated />
@@ -283,146 +310,136 @@ watch(
         </el-result>
       </template>
       <template v-else-if="videoData">
-        <div class="video-player-card">
-          <h2 class="video-title">{{ videoData.title }}</h2>
-          <div class="video-player-wrap">
-            <div class="video-container">
-              <!-- 使用普通HTML5视频元素 -->
-              <video
-                v-if="currentVideoUrl"
-                ref="videoElement"
-                class="main-video-player"
-                :src="currentVideoUrl"
-              :poster="coverUrl"
-              controls
-                preload="auto"
-                controlsList="nodownload nofullscreen"
-                disablePictureInPicture
-                @timeupdate="handleTimeUpdate"
-                @error="handleVideoError"
-                @loadeddata="handleVideoLoaded"
-                @contextmenu.prevent
-              ></video>
-              <el-image v-else :src="coverUrl" class="main-video-cover" fit="cover" @contextmenu.prevent />
-              
-              <!-- 视频播放状态标签 -->
-              <div class="video-status-tags">
-                <el-tag v-if="!isVipUser && videoData.previewUrl" type="warning" effect="dark" size="large">
-                  预览版本
-                </el-tag>
-                <el-tag v-else-if="!isVipUser" type="warning" effect="dark" size="large">
-                  试看模式 ({{ previewDuration }}秒)
-                </el-tag>
-                <el-tag v-else type="success" effect="dark" size="large">
-                  <i class="el-icon-video-play"></i> VIP完整版本
-                </el-tag>
-              </div>
-              
-              <!-- 防止复制视频URL的遮罩层 -->
-              <div class="video-protection-overlay" @contextmenu.prevent></div>
-              
-              <!-- 试看提示遮罩 -->
-              <div v-if="!isVipUser && !trialEnded" class="preview-overlay">
-                <div class="preview-info">
-                  <i class="el-icon-lock"></i>
-                  <span v-if="videoData.previewUrl">预览版本</span>
-                  <span v-else>试看 {{ previewDuration }}秒</span>
+        <div class="video-content-layout">
+          <!-- 左侧主区域 -->
+          <div class="video-main-content">
+            <!-- 视频播放器 -->
+            <div class="video-player-wrap">
+              <div class="video-container">
+                <!-- 使用普通HTML5视频元素 -->
+                <video
+                  v-if="currentVideoUrl"
+                  ref="videoElement"
+                  class="main-video-player"
+                  :src="currentVideoUrl"
+                  :poster="coverUrl"
+                  controls
+                  preload="auto"
+                  controlsList="nodownload"
+                  disablePictureInPicture
+                  @timeupdate="handleTimeUpdate"
+                  @error="handleVideoError"
+                  @loadeddata="handleVideoLoaded"
+                  @contextmenu.prevent
+                ></video>
+                <el-image v-else :src="coverUrl" class="main-video-cover" fit="cover" @contextmenu.prevent />
+                
+                <!-- 自定义全屏按钮 -->
+                <div class="custom-video-controls" v-if="currentVideoUrl && !trialEnded">
+                  <div class="fullscreen-button" @click="toggleFullScreen">
+                    <i :class="isFullScreen ? 'el-icon-close' : 'el-icon-full-screen'"></i>
+                  </div>
                 </div>
-              </div>
-              
-              <!-- 试看结束遮罩 -->
-              <div v-if="trialEnded" class="trial-ended-overlay">
-                <div class="trial-ended-content">
-                  <i class="el-icon-lock"></i>
-                  <h3>试看结束</h3>
-                  <p>升级为VIP会员可观看完整内容</p>
-                  <div class="trial-ended-buttons">
-                    <el-button type="danger" @click="$router.push('/stocks-front/vip_upgrade')">
-                      <i class="el-icon-crown"></i> 立即升级VIP
-                    </el-button>
+                
+                <!-- 防止复制视频URL的遮罩层 -->
+                <div class="video-protection-overlay" @contextmenu.prevent></div>
+                
+                <!-- 试看结束遮罩 -->
+                <div v-if="trialEnded" class="trial-ended-overlay">
+                  <div class="trial-ended-content">
+                    <i class="el-icon-lock"></i>
+                    <h3>试看结束</h3>
+                    <p>升级为VIP会员可观看完整内容</p>
+                    <div class="trial-ended-buttons">
+                      <el-button type="danger" @click="$router.push('/stocks-front/vip_upgrade')">
+                        <i class="el-icon-crown"></i> 立即升级VIP
+                      </el-button>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-          
-          <!-- 播放器调试信息 -->
-          <div v-if="isDev" class="debug-info">
-            <p>播放器状态: {{ playerReady ? '已就绪' : '未就绪' }}</p>
-            <p>视频URL: {{ currentVideoUrl || '未加载' }}</p>
-            <p>用户VIP状态: {{ isVipUser ? 'VIP用户' : '普通用户' }}</p>
-            <p>试看结束: {{ trialEnded ? '是' : '否' }}</p>
-          </div>
-        </div>
-        
-        <!-- 视频信息卡片 -->
-        <div class="video-info-card">
-          <div class="video-meta-row">
-            <div class="meta-item">
-              <i class="el-icon-folder"></i>
-              <span class="video-meta-label">分类：</span>
-              <el-tag size="small" effect="plain" type="info">{{ typeName }}</el-tag>
-            </div>
-            <div class="meta-item">
-              <i class="el-icon-view"></i>
-              <span class="video-meta-label">观看数：</span>
-              <span class="meta-value">{{ videoData.view || 0 }}</span>
-            </div>
-            <div class="meta-item">
-              <span class="video-meta-label">状态：</span>
-              <el-tag v-if="videoData.status === 1" type="success" size="small">已上架</el-tag>
-              <el-tag v-else type="info" size="small">已下架</el-tag>
-            </div>
-            <div v-if="!isVipUser" class="vip-notice">
-              <el-button type="danger" size="default" @click="$router.push('/stocks-front/vip_upgrade')">
-                <i class="el-icon-crown"></i> 升级VIP观看完整内容
-              </el-button>
-            </div>
-          </div>
-          
-          <el-divider>
-            <i class="el-icon-info"></i> 视频简介
-          </el-divider>
-          
-          <div class="video-desc">
-            <p v-if="videoData.description">{{ videoData.description }}</p>
-            <p v-else class="no-desc">暂无视频简介</p>
-          </div>
-          
-          <!-- 推荐标签 -->
-          <div v-if="videoData.tags" class="video-tags">
-            <span class="tags-label">标签：</span>
-            <el-tag 
-              v-for="(tag, index) in videoData.tags.split(',')" 
-              :key="index" 
-              size="small" 
-              effect="light" 
-              class="tag-item"
-            >
-              {{ tag }}
-            </el-tag>
-          </div>
-        </div>
-        
-        <!-- 相关推荐 -->
-        <div v-if="videoData.relatedVideos && videoData.relatedVideos.length" class="related-videos">
-          <h3 class="section-title">相关推荐</h3>
-          <div class="related-list">
-            <div 
-              v-for="item in videoData.relatedVideos" 
-              :key="item.id" 
-              class="related-item"
-              @click="$router.push(`/stocks-front/videodetail/${item.id}`)"
-            >
-              <div class="related-cover-wrapper">
-                <el-image :src="item.picUrl" class="related-cover" fit="cover" @contextmenu.prevent />
-                <div class="play-icon-overlay">
-                  <i class="el-icon-video-play"></i>
+            
+            <!-- 视频信息区域 -->
+            <div class="video-info-section">
+              <h1 class="video-title">{{ videoData.title }}</h1>
+              
+              <div class="video-meta-info">
+                <div class="video-meta-left">
+                  <div class="view-count">
+                    <i class="el-icon-view"></i>
+                    <span>{{ videoData.view || 0 }}次观看</span>
+                  </div>
+                  <div class="video-category">
+                    <i class="el-icon-folder"></i>
+                    <span>{{ typeName }}</span>
+                  </div>
+                </div>
+                
+                <div class="video-meta-right">
+                  <div v-if="!isVipUser" class="vip-access-status">
+                    <el-tag v-if="videoData.previewUrl" type="warning" effect="dark">预览版本</el-tag>
+                    <el-tag v-else type="warning" effect="dark">试看模式 ({{ previewDuration }}秒)</el-tag>
+                    <el-button type="danger" size="small" @click="$router.push('/stocks-front/vip_upgrade')">
+                      升级VIP
+                    </el-button>
+                  </div>
+                  <div v-else class="vip-access-status">
+                    <el-tag type="success" effect="dark">VIP完整版本</el-tag>
+                  </div>
                 </div>
               </div>
-              <div class="related-info">
-                <div class="related-title">{{ item.title }}</div>
-                <div class="related-views">{{ item.view || 0 }}次观看</div>
+              
+              <!-- 视频描述 -->
+              <div class="video-description-card">
+                <div class="description-header">
+                  <span class="description-title"><i class="el-icon-info"></i> 视频简介</span>
+                  <div class="video-tags" v-if="videoData.tags">
+                    <el-tag 
+                      v-for="(tag, index) in videoData.tags.split(',')" 
+                      :key="index" 
+                      size="small" 
+                      effect="light" 
+                      class="tag-item"
+                    >
+                      {{ tag }}
+                    </el-tag>
+                  </div>
+                </div>
+                <div class="description-content">
+                  <p v-if="videoData.description">{{ videoData.description }}</p>
+                  <p v-else class="no-desc">暂无视频简介</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 右侧推荐区域 -->
+          <div class="video-sidebar">
+            <h3 class="sidebar-title">相关推荐</h3>
+            <div class="related-videos-list">
+              <div 
+                v-for="item in videoData.relatedVideos" 
+                :key="item.id" 
+                class="related-video-item"
+                @click="$router.push(`/stocks-front/videodetail/${item.id}`)"
+              >
+                <div class="related-thumbnail">
+                  <el-image :src="item.picUrl" fit="cover" @contextmenu.prevent />
+                  <div class="play-icon-overlay">
+                    <i class="el-icon-video-play"></i>
+                  </div>
+                </div>
+                <div class="related-info">
+                  <div class="related-title">{{ item.title }}</div>
+                  <div class="related-meta">{{ item.view || 0 }}次观看</div>
+                </div>
+              </div>
+              
+              <!-- 如果没有相关视频，显示提示 -->
+              <div v-if="!videoData.relatedVideos || videoData.relatedVideos.length === 0" class="no-related">
+                <i class="el-icon-video-camera"></i>
+                <p>暂无相关推荐视频</p>
               </div>
             </div>
           </div>
@@ -434,21 +451,22 @@ watch(
 
 <style scoped lang="scss">
 .video-detail-page {
-  max-width: 1000px;
-  margin: 20px auto 60px auto;
-  padding: 0 20px;
+  background-color: #f9f9f9;
+  min-height: 100vh;
 }
 
-.video-detail-content {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
-  padding: 30px;
+.video-detail-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 80px 16px 40px;
 }
 
 // 加载状态样式
 .loading-container {
-  padding: 20px 0;
+  padding: 20px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   
   .skeleton-player {
     height: 400px;
@@ -458,61 +476,81 @@ watch(
   }
 }
 
-// 视频播放器卡片
-.video-player-card {
-  margin-bottom: 30px;
+// YouTube风格布局
+.video-content-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 24px;
 }
 
-.video-title {
-  font-size: 26px;
-  font-weight: 600;
-  margin-bottom: 24px;
-  text-align: center;
-  background: linear-gradient(90deg, #6a82fb 0%, #fc5c7d 100%);
-  -webkit-background-clip: text;
-  color: transparent;
-  padding: 0 20px;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+// 左侧主内容区域
+.video-main-content {
+  display: flex;
+  flex-direction: column;
 }
 
+// 视频播放器
 .video-player-wrap {
   width: 100%;
-  display: flex;
-  justify-content: center;
 }
 
 .video-container {
   position: relative;
   width: 100%;
-  border-radius: 12px;
+  border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  background: #000;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .main-video-player {
   width: 100%;
   aspect-ratio: 16/9;
-  background: #000;
-  border-radius: 12px;
   display: block;
   user-select: none;
   -webkit-user-select: none;
 }
 
 .main-video-cover {
-    width: 100%;
+  width: 100%;
   aspect-ratio: 16/9;
-  border-radius: 12px;
   object-fit: cover;
   user-select: none;
   -webkit-user-select: none;
 }
 
-.video-status-tags {
+// 自定义视频控制
+.custom-video-controls {
   position: absolute;
-  top: 16px;
-  right: 16px;
+  bottom: 10px;
+  right: 10px;
   z-index: 10;
+  opacity: 0;
+  transition: opacity 0.3s;
+  
+  .fullscreen-button {
+    width: 40px;
+    height: 40px;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: white;
+    
+    i {
+      font-size: 20px;
+    }
+    
+    &:hover {
+      background: rgba(0, 0, 0, 0.8);
+    }
+  }
+}
+
+.video-container:hover .custom-video-controls {
+  opacity: 1;
 }
 
 // 防止复制视频URL的遮罩层
@@ -524,44 +562,6 @@ watch(
   bottom: 0;
   z-index: 5;
   pointer-events: none;
-}
-
-// 试看提示遮罩
-.preview-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(to bottom, rgba(0,0,0,0.1) 70%, rgba(0,0,0,0.7) 100%);
-  z-index: 5;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.3s;
-  
-  .preview-info {
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.6);
-    color: #fff;
-    padding: 8px 16px;
-    border-radius: 20px;
-    font-size: 14px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    
-    i {
-      font-size: 16px;
-      color: #fc5c7d;
-    }
-  }
-
-      &:hover {
-    opacity: 1;
-  }
 }
 
 // 试看结束遮罩
@@ -612,161 +612,157 @@ watch(
   }
 }
 
-// 调试信息
-.debug-info {
-  margin-top: 16px;
-  padding: 12px;
-  background: #f0f9ff;
-  border-radius: 8px;
-  font-size: 14px;
-  color: #606266;
-  border-left: 4px solid #409eff;
-  
-  p {
-    margin: 4px 0;
-  }
-}
-
-// 视频信息卡片
-.video-info-card {
-  background: #f8fafc;
-  border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 30px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  border: 1px solid #ebeef5;
-}
-
-.video-meta-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.meta-item {
-  display: flex;
-  align-items: center;
-  font-size: 14px;
-  
-  i {
-    margin-right: 4px;
-    color: #909399;
-  }
-}
-
-.video-meta-label {
-  color: #606266;
-  margin-right: 6px;
-  font-weight: 500;
-}
-
-.meta-value {
-  color: #303133;
-  font-weight: 500;
-}
-
-.vip-notice {
-  margin-left: auto;
-}
-
-.video-desc {
-  font-size: 15px;
-  line-height: 1.8;
-  color: #303133;
-  padding: 16px;
+// 视频信息区域
+.video-info-section {
   background: #fff;
   border-radius: 8px;
-  border-left: 4px solid #6a82fb;
-  margin-bottom: 20px;
-  
-  .no-desc {
-    color: #909399;
-    font-style: italic;
+  padding: 20px;
+  margin-top: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
+
+.video-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #030303;
+  margin: 0 0 12px 0;
+  line-height: 1.4;
+}
+
+.video-meta-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.video-meta-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: #606060;
+  font-size: 14px;
+  
+  .view-count, .video-category {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    
+    i {
+      font-size: 16px;
+    }
+  }
+}
+
+.video-meta-right {
+  .vip-access-status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+}
+
+// 视频描述卡片
+.video-description-card {
+  background: #f9f9f9;
+  border-radius: 8px;
+  padding: 16px;
+  
+  .description-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  
+  .description-title {
+    font-weight: 600;
+    font-size: 16px;
+    color: #030303;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    
+    i {
+      color: #606060;
+    }
+  }
+  
+  .description-content {
+    color: #0f0f0f;
+    font-size: 14px;
+    line-height: 1.5;
+    
+    .no-desc {
+      color: #909090;
+      font-style: italic;
+    }
+  }
 }
 
 .video-tags {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  margin-top: 16px;
-  
-  .tags-label {
-    color: #606266;
-    margin-right: 8px;
-    font-size: 14px;
-}
+  gap: 8px;
   
   .tag-item {
-    margin-right: 8px;
-    margin-bottom: 8px;
+    margin: 0;
   }
 }
 
-// 相关推荐
-.related-videos {
-  margin-top: 40px;
-}
-
-.section-title {
-  font-size: 20px;
-  font-weight: 600;
-  margin-bottom: 20px;
-  position: relative;
-  padding-left: 12px;
-  
-  &::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 4px;
-    height: 20px;
-    background: linear-gradient(to bottom, #6a82fb, #fc5c7d);
-    border-radius: 2px;
+// 右侧推荐区域
+.video-sidebar {
+  .sidebar-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 16px 0;
+    color: #030303;
   }
 }
 
-.related-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 20px;
+.related-videos-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.related-item {
+.related-video-item {
+  display: flex;
+  gap: 12px;
   cursor: pointer;
-  border-radius: 8px;
-  overflow: hidden;
-  transition: transform 0.3s, box-shadow 0.3s;
   
   &:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+    .related-thumbnail img {
+      transform: scale(1.05);
+    }
     
     .play-icon-overlay {
       opacity: 1;
     }
+    
+    .related-title {
+      color: #065fd4;
+    }
   }
 }
 
-.related-cover-wrapper {
+.related-thumbnail {
   position: relative;
-  width: 100%;
-  aspect-ratio: 16/9;
+  width: 168px;
+  height: 94px;
+  border-radius: 8px;
   overflow: hidden;
-}
-
-.related-cover {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.3s;
+  flex-shrink: 0;
   
-  &:hover {
-    transform: scale(1.05);
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s;
   }
 }
 
@@ -784,24 +780,25 @@ watch(
   transition: opacity 0.3s;
   
   i {
-    font-size: 48px;
+    font-size: 28px;
     color: #fff;
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
   }
 }
 
 .related-info {
-  padding: 12px;
-  background: #f8fafc;
-  border-bottom-left-radius: 8px;
-  border-bottom-right-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  min-width: 0;
 }
 
 .related-title {
   font-size: 14px;
   font-weight: 500;
-  color: #303133;
-  margin-bottom: 6px;
+  color: #0f0f0f;
+  margin-bottom: 4px;
+  transition: color 0.2s;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -809,40 +806,75 @@ watch(
   -webkit-box-orient: vertical;
 }
 
-.related-views {
+.related-meta {
   font-size: 12px;
-  color: #909399;
+  color: #606060;
+}
+
+.no-related {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px;
+  color: #606060;
+  background: #f9f9f9;
+  border-radius: 8px;
+  text-align: center;
+  
+  i {
+    font-size: 32px;
+    margin-bottom: 12px;
+    opacity: 0.7;
+  }
+  
+  p {
+    margin: 0;
+  }
 }
 
 // 响应式调整
+@media (max-width: 992px) {
+  .video-content-layout {
+    grid-template-columns: 1fr;
+  }
+  
+  .video-sidebar {
+    margin-top: 24px;
+  }
+}
+
 @media (max-width: 768px) {
-  .video-detail-content {
-    padding: 20px;
+  .video-detail-container {
+    padding: 80px 12px 30px;
   }
   
-  .video-title {
-    font-size: 22px;
-  }
-  
-  .video-meta-row {
+  .video-meta-info {
     flex-direction: column;
     align-items: flex-start;
     gap: 12px;
   }
   
-  .vip-notice {
-    margin-left: 0;
-    margin-top: 12px;
+  .video-meta-right {
     width: 100%;
     
-    .el-button {
+    .vip-access-status {
+      justify-content: space-between;
       width: 100%;
     }
   }
   
-  .related-list {
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 15px;
+  .related-video-item {
+    .related-thumbnail {
+      width: 120px;
+      height: 67px;
+    }
+  }
+  
+  .description-header {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 </style>
+

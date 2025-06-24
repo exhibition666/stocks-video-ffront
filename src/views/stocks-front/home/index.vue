@@ -9,8 +9,9 @@ import type { Video } from '@/api/system/video'
 import type { VideoType } from '@/api/system/videotype'
 import { getAccessUrl } from '@/api/infra/file'
 import { useSignedUrlPreview } from '@/utils/useSignedUrlPreview'
-import VipUpgrade from '@/views/stocks-front/vip_upgrade/index.vue'
 import { useUserStore } from '@/store/modules/user'
+import { Search } from '@element-plus/icons-vue'
+import { getAccessToken } from '@/utils/auth'
 
 const { getPrefixCls } = useDesign()
 const prefixCls = getPrefixCls('home')
@@ -42,8 +43,32 @@ const videoPicSignedUrlMap = ref<Record<number, ReturnType<typeof useSignedUrlPr
 // 当前选中的分类ID，null 表示全部
 const currentCategoryId = ref<number | null>(null)
 
+// 搜索关键词
+const searchKeyword = ref('')
+
+// 判断用户是否已登录
+const isUserLoggedIn = computed(() => {
+  return !!getAccessToken()
+})
+
 const userStore = useUserStore()
-const user = computed(() => userStore.user)
+
+// 处理搜索
+const handleSearch = () => {
+  if (!searchKeyword.value.trim()) return
+  
+  console.log('搜索关键词:', searchKeyword.value)
+  // 可以添加实际的搜索逻辑，例如调用API进行搜索
+  errorMsg.value = `正在搜索"${searchKeyword.value}"相关的视频...`
+  
+  // 模拟搜索行为
+  loading.value = true
+  setTimeout(() => {
+    loading.value = false
+    // 这里可以调用实际的搜索API
+    // searchVideos(searchKeyword.value)
+  }, 1000)
+}
 
 // 获取签名URL的工具函数
 const fetchSignedUrl = async (path: string) => {
@@ -92,7 +117,7 @@ const getVideoList = async (categoryId?: number) => {
   try {
     const params = {
       pageNo: 1,
-      pageSize: 12
+      pageSize: 24 // 增加默认显示数量
     }
     if (categoryId) {
       params['typeId'] = categoryId
@@ -125,6 +150,18 @@ const goToVideoDetail = (videoId: number) => {
   router.push(`/stocks-front/videodetail/${videoId}`)
 }
 
+const goToHome = () => {
+  router.push('/stocks-front/home')
+}
+
+const goToUserDetail = () => {
+  router.push('/stocks-front/userDetail')
+}
+
+const goToVipUpgrade = () => {
+  router.push('/stocks-front/vip_upgrade')
+}
+
 // 处理"全部"分类点击
 const handleAllCategory = () => {
   currentCategoryId.value = null
@@ -143,99 +180,176 @@ const getDefaultImage = (url?: string) => {
 
 // 格式化观看次数
 const formatViews = (count: number = 0) => {
-  if (count >= 10000) {
-    return (count / 10000).toFixed(1) + '万次观看'
+  if (count >= 1000000) {
+    return (count / 1000000).toFixed(1) + 'M 次观看'
+  } else if (count >= 1000) {
+    return (count / 1000).toFixed(1) + 'K 次观看'
   }
-  return count + '次观看'
+  return count + ' 次观看'
 }
 
-const goToFileTest = () => {
-  router.push('/stocks-front/filetest')
+// 格式化发布时间 (随机生成，仅用于演示)
+const formatDate = () => {
+  const days = Math.floor(Math.random() * 365)
+  if (days === 0) {
+    return '今天'
+  } else if (days === 1) {
+    return '昨天'
+  } else if (days < 7) {
+    return days + ' 天前'
+  } else if (days < 30) {
+    return Math.floor(days / 7) + ' 周前'
+  } else if (days < 365) {
+    return Math.floor(days / 30) + ' 个月前'
+  } else {
+    return Math.floor(days / 365) + ' 年前'
+  }
 }
 
-const goToSTSDeleteTest = () => {
-  router.push('/stocks-front/filetest/stsdelete')
+// 随机生成观看次数（用于演示）
+const getRandomViews = () => {
+  return Math.floor(Math.random() * 1000000)
+}
+
+// 移动端侧边栏状态
+const sidebarVisible = ref(false)
+const toggleSidebar = () => {
+  sidebarVisible.value = !sidebarVisible.value
 }
 
 onMounted(async () => {
   console.log('首页组件已加载')
-  // 测试获取签名URL
-  console.log('开始获取图片URL, 路径:', testImagePath)
-  testImageLoading.value = true
-  errorMsg.value = ''
-  
-  try {
-    const url = await fetchSignedUrl(testImagePath)
-    console.log('准备赋值 testImageUrl，url:', url)
-    testImageUrl.value = url
-    console.log('赋值后 testImageUrl:', testImageUrl.value)
-  } catch (error) {
-    console.error('初始化获取图片URL失败:', error)
-    errorMsg.value = error.message
-  } finally {
-    testImageLoading.value = false
-  }
-  
   getVideoCategories()
   getVideoList() // 默认加载全部视频
-  console.log('当前 userStore.user:', userStore.user)
 })
 </script>
 
 <template>
   <div :class="prefixCls">
     <StocksHeader />
-    <div style="margin-bottom: 24px; max-width: 600px; margin-left: auto; margin-right: auto;">
-      <el-card v-if="user" shadow="hover">
-        <template #header>
-          <span>当前登录用户信息</span>
-        </template>
-        <div>昵称：{{ user.nickname }}</div>
-        <div>手机号：{{ user.mobile }}</div>
-        <div>等级ID：{{ user.level_id }}</div>
-        <div>积分：{{ user.point }}</div>
-        <div>性别：{{ user.sex === 1 ? '男' : user.sex === 2 ? '女' : '未知' }}</div>
-        <div>生日：{{ user.birthday }}</div>
-        <div v-if="user.vip_expire_time">VIP到期时间：{{ user.vip_expire_time }}</div>
-      </el-card>
-      <el-alert v-else title="未登录" type="info" show-icon />
+    
+    <!-- 移动端导航切换按钮 -->
+    <div class="mobile-menu-toggle" @click="toggleSidebar">
+      <i class="el-icon-menu"></i>
     </div>
-    <div :class="`${prefixCls}-main`">
-      <div :class="`${prefixCls}-sidebar`">
-        <div class="category-header">视频分类</div>
-        <ul class="category-list">
-          <li
-            class="category-item"
-            :class="{ active: currentCategoryId === null }"
-            @click="handleAllCategory"
-          >
-            <span>全部</span>
-          </li>
-          <li
+    
+    <div class="app-layout">
+      <!-- 侧边栏 -->
+      <aside class="sidebar" :class="{ 'active': sidebarVisible }">
+        <div class="sidebar-section">
+          <div class="sidebar-item" :class="{ active: $route.path.includes('/stocks-front/home') }" @click="goToHome">
+            <i class="el-icon-house"></i>
+            <span>首页</span>
+          </div>
+          <div class="sidebar-item">
+            <i class="el-icon-video-play"></i>
+            <span>短片</span>
+          </div>
+          <div class="sidebar-item">
+            <i class="el-icon-collection-tag"></i>
+            <span>订阅内容</span>
+          </div>
+        </div>
+        
+        <div class="sidebar-divider"></div>
+        
+        <div class="sidebar-section">
+          <div class="sidebar-item">
+            <i class="el-icon-collection"></i>
+            <span>媒体库</span>
+          </div>
+          <div class="sidebar-item">
+            <i class="el-icon-time"></i>
+            <span>历史记录</span>
+          </div>
+          <div class="sidebar-item">
+            <i class="el-icon-video-camera"></i>
+            <span>我的视频</span>
+          </div>
+          <div class="sidebar-item">
+            <i class="el-icon-clock"></i>
+            <span>稍后观看</span>
+          </div>
+          <div class="sidebar-item">
+            <i class="el-icon-star-on"></i>
+            <span>收藏</span>
+          </div>
+        </div>
+        
+        <div class="sidebar-divider"></div>
+        
+        <div class="sidebar-section">
+          <div class="sidebar-header">探索</div>
+          <div 
             v-for="category in categories"
             :key="category.id"
-            class="category-item"
+            class="sidebar-item"
             :class="{ active: currentCategoryId === category.id }"
             @click="handleCategoryClick(category)"
           >
+            <i class="el-icon-folder"></i>
             <span>{{ category.name }}</span>
-          </li>
-        </ul>
-      </div>
-      <div :class="`${prefixCls}-content`">
-        <div style="width:100%;display:flex;justify-content:center;margin-bottom:32px;">
-          <router-link to="/stocks-front/vip_upgrade">
-            <el-button type="primary" size="large" style="font-size:18px;padding: 0 48px;">
-              会员VIP充值/升级入口
-            </el-button>
-          </router-link>
+          </div>
         </div>
-        <div v-if="loading" class="loading-container">
-          <el-skeleton :rows="3" animated />
-          <el-skeleton :rows="3" animated />
-          <el-skeleton :rows="3" animated />
+
+        <div class="sidebar-divider"></div>
+
+        <div class="sidebar-section" v-if="isUserLoggedIn">
+          <div class="sidebar-header">我的账户</div>
+          <div class="sidebar-item" @click="goToUserDetail">
+            <i class="el-icon-user"></i>
+            <span>个人资料</span>
+          </div>
+          <div class="sidebar-item" @click="goToVipUpgrade">
+            <i class="el-icon-trophy"></i>
+            <span>购买VIP</span>
+          </div>
+        </div>
+      </aside>
+      
+      <!-- 遮罩层（移动端） -->
+      <div class="sidebar-overlay" v-if="sidebarVisible" @click="toggleSidebar"></div>
+      
+      <!-- 主内容区 -->
+      <main class="main-content">
+        <!-- 顶部横幅 -->
+        <div class="content-header">
+          <h1 class="page-title">精选视频</h1>
+          <p class="page-description">发现最新、最热门的视频内容</p>
         </div>
         
+        <!-- 分类筛选器 -->
+        <div class="category-chips">
+          <div 
+            class="category-chip" 
+            :class="{ active: currentCategoryId === null }"
+            @click="handleAllCategory"
+          >
+            全部
+          </div>
+          <div 
+            v-for="category in categories.slice(0, 10)"
+            :key="category.id"
+            class="category-chip"
+            :class="{ active: currentCategoryId === category.id }"
+            @click="handleCategoryClick(category)"
+          >
+            {{ category.name }}
+          </div>
+        </div>
+        
+        <!-- 加载提示 -->
+        <div v-if="loading" class="loading-container">
+          <div v-for="i in 8" :key="i" class="loading-skeleton">
+            <div class="skeleton-thumbnail"></div>
+            <div class="skeleton-details">
+              <div class="skeleton-title"></div>
+              <div class="skeleton-meta"></div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 错误提示 -->
         <el-alert
           v-if="errorMsg"
           :title="errorMsg"
@@ -244,147 +358,320 @@ onMounted(async () => {
           :closable="false"
           class="mb-4"
         />
-
         
-        
+        <!-- 视频网格 -->
         <el-empty v-if="!loading && videoList.length === 0" description="暂无视频" />
-        <div v-else-if="!loading" :class="`${prefixCls}-grid`">
+        <div v-else-if="!loading" class="video-grid">
           <div
             v-for="video in videoList"
             :key="video.id"
-            :class="`${prefixCls}-card`"
+            class="video-card"
             @click="goToVideoDetail(video.id)"
           >
             <div class="thumbnail">
               <img :src="videoPicSignedUrlMap[video.id]?.signedUrl || getDefaultImage()" :alt="video.title" />
               <span class="duration">{{ Math.floor(video.duration || 0) }}秒</span>
             </div>
-            <div class="info">
+            <div class="video-info">
+              <div class="avatar">
+                <div class="avatar-circle"></div>
+              </div>
               <div class="details">
-                <h3 class="title">{{ video.title }}</h3>
-                <p class="stats">
-                  <span>{{ formatViews(1000) }}</span>
-                </p>
+                <h3 class="title" :title="video.title">{{ video.title }}</h3>
+                <div class="channel-name">{{ video.author || '匿名用户' }}</div>
+                <div class="meta">
+                  <span class="views">{{ formatViews(getRandomViews()) }}</span>
+                  <span class="dot">•</span>
+                  <span class="publish-date">{{ formatDate() }}</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+        
+        <!-- 分页或加载更多按钮 -->
+        <div class="load-more-container" v-if="!loading && videoList.length > 0">
+          <el-button type="primary" round class="load-more-btn">加载更多</el-button>
+        </div>
+      </main>
     </div>
   </div>
 </template>
 
 <style lang="scss" scoped>
 $prefix-cls: #{$namespace}-home;
+$primary-color: #065fd4;
+$text-color: #0f0f0f;
+$text-secondary: #606060;
+$bg-color: #ffffff;
+$bg-secondary: #f9f9f9;
+$border-color: #e5e5e5;
+$hover-color: #f2f2f2;
+$sidebar-width: 240px;
+$header-height: 60px;
 
 .#{$prefix-cls} {
   width: 100%;
   min-height: 100vh;
-  background: #f6f8fb;
-
-  &-main {
+  background: $bg-color;
+  color: $text-color;
+  
+  .app-layout {
     display: flex;
-    padding-top: 60px;
-    min-height: calc(100vh - 60px);
-    background: none;
-    max-width: 1600px;
-    margin: 0 auto;
-    gap: 32px;
+    padding-top: $header-height;
+    min-height: calc(100vh - $header-height);
   }
-
-  &-sidebar {
-    width: 260px;
-    padding: 32px 0 24px 0;
-    border-right: none;
-    background: #fff;
-    height: 100%;
+  
+  // 侧边栏样式
+  .sidebar {
+    width: $sidebar-width;
+    height: calc(100vh - $header-height);
+    position: fixed;
+    left: 0;
+    top: $header-height;
+    background: $bg-color;
     overflow-y: auto;
-    border-radius: 18px;
-    box-shadow: 0 4px 24px 0 rgba(80,120,255,0.06);
-    margin-top: 32px;
-    .category-header {
-      padding: 0 24px 12px;
-      font-size: 18px;
-      font-weight: bold;
-      color: #333;
-      border-bottom: 1px solid #e4eaf3;
-      margin-bottom: 8px;
-      letter-spacing: 0.5px;
+    padding: 12px 0;
+    z-index: 100;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    
+    &-section {
+      margin-bottom: 12px;
     }
-    .category-list {
-      list-style: none;
-      padding: 0;
-      margin: 0;
+    
+    &-header {
+      padding: 8px 24px;
+      font-size: 16px;
+      font-weight: 500;
+      color: $text-color;
     }
-    .category-item {
+    
+    &-item {
       display: flex;
       align-items: center;
-      padding: 14px 24px;
+      padding: 10px 24px;
       cursor: pointer;
-      color: #333;
-      transition: background-color 0.3s, color 0.3s;
-      border-radius: 8px;
-      margin-bottom: 2px;
-      &:hover {
-        background-color: #f0f4ff;
-        color: #6a82fb;
+      border-radius: 0 20px 20px 0;
+      margin-right: 12px;
+      
+      i {
+        margin-right: 24px;
+        font-size: 20px;
       }
-      &.active {
-        background-color: #eaf0ff;
-        color: #6a82fb;
-        font-weight: bold;
-      }
+      
       span {
-        font-size: 15px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      
+      &:hover {
+        background: $hover-color;
+      }
+      
+      &.active {
+        background: rgba($primary-color, 0.1);
+        font-weight: 500;
+        color: $primary-color;
+      }
+    }
+    
+    &-divider {
+      height: 1px;
+      background: $border-color;
+      margin: 12px 0;
+    }
+  }
+  
+  // 侧边栏遮罩
+  .sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 99;
+    display: none;
+  }
+  
+  // 移动端菜单按钮
+  .mobile-menu-toggle {
+    position: fixed;
+    top: 70px;
+    left: 10px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: $primary-color;
+    color: white;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 99;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+    
+    &:hover {
+      background: darken($primary-color, 10%);
+    }
+    
+    i {
+      font-size: 20px;
+    }
+  }
+  
+  // 主内容区样式
+  .main-content {
+    flex: 1;
+    margin-left: $sidebar-width;
+    padding: 24px 40px;
+    background-color: #f5f7fa;
+  }
+  
+  // 内容头部
+  .content-header {
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba($border-color, 0.5);
+    
+    .page-title {
+      font-size: 28px;
+      font-weight: 600;
+      margin: 0 0 8px;
+      color: $text-color;
+    }
+    
+    .page-description {
+      font-size: 16px;
+      color: $text-secondary;
+      margin: 0;
+    }
+  }
+  
+  // 分类筛选器
+  .category-chips {
+    display: flex;
+    overflow-x: auto;
+    gap: 12px;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    scrollbar-width: none; // Firefox
+    &::-webkit-scrollbar {
+      display: none; // Chrome, Safari, Edge
+    }
+    
+    .category-chip {
+      background: $bg-secondary;
+      color: $text-color;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+      border: 1px solid transparent;
+      
+      &:hover {
+        border-color: rgba($primary-color, 0.3);
+        background: darken($bg-secondary, 3%);
+      }
+      
+      &.active {
+        background: $primary-color;
+        color: $bg-color;
       }
     }
   }
-
-  &-content {
-    flex: 1;
-    padding: 40px 40px 40px 40px;
-    overflow-y: auto;
-    background: #fff;
-    border-radius: 18px;
-    min-height: 600px;
-    box-shadow: 0 4px 24px 0 rgba(80,120,255,0.06);
-    .loading-container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-    .mb-4 {
-      margin-bottom: 16px;
-    }
-  }
-
-  &-grid {
+  
+  // 加载骨架屏
+  .loading-container {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 32px;
-    max-width: 1800px;
-    margin: 0 auto;
-    padding: 0 16px;
-  }
-
-  &-card {
-    background-color: #f8fafc;
-    border-radius: 16px;
-    overflow: hidden;
-    transition: all 0.25s cubic-bezier(.23,1,.32,1);
-    box-shadow: 0 2px 12px 0 rgba(106,130,251,0.08);
-    cursor: pointer;
-    border: 1.5px solid #f0f4ff;
-    &:hover {
-      transform: translateY(-6px) scale(1.03);
-      box-shadow: 0 8px 24px 0 rgba(106,130,251,0.13);
-      border-color: #6a82fb;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+    
+    .loading-skeleton {
+      display: flex;
+      flex-direction: column;
+      
+      .skeleton-thumbnail {
+        width: 100%;
+        height: 180px;
+        background: linear-gradient(90deg, #f0f0f0 25%, #f8f8f8 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+        border-radius: 12px;
+        margin-bottom: 12px;
+      }
+      
+      .skeleton-details {
+        display: flex;
+        flex-direction: column;
+        
+        .skeleton-title {
+          height: 20px;
+          background: linear-gradient(90deg, #f0f0f0 25%, #f8f8f8 50%, #f0f0f0 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite;
+          border-radius: 4px;
+          margin-bottom: 12px;
+          width: 90%;
+        }
+        
+        .skeleton-meta {
+          height: 16px;
+          background: linear-gradient(90deg, #f0f0f0 25%, #f8f8f8 50%, #f0f0f0 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite;
+          border-radius: 4px;
+          width: 60%;
+        }
+      }
     }
+  }
+  
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  
+  // 视频网格
+  .video-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 24px;
+  }
+  
+  // 视频卡片
+  .video-card {
+    cursor: pointer;
+    background: $bg-color;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    
+    &:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+      
+      .thumbnail img {
+        transform: scale(1.05);
+      }
+    }
+    
     .thumbnail {
       position: relative;
       width: 100%;
-      padding-top: 56.25%; // 16:9 比例
-      background: #eaf1ff;
+      overflow: hidden;
+      
+      &::before {
+        content: "";
+        display: block;
+        padding-top: 56.25%; // 16:9 比例
+      }
+      
       img {
         position: absolute;
         top: 0;
@@ -392,116 +679,135 @@ $prefix-cls: #{$namespace}-home;
         width: 100%;
         height: 100%;
         object-fit: cover;
-        border-radius: 12px 12px 0 0;
-        background: #f8fafc;
+        transition: transform 0.3s ease;
       }
+      
       .duration {
         position: absolute;
-        bottom: 10px;
-        right: 12px;
-        background-color: rgba(0, 0, 0, 0.7);
+        bottom: 8px;
+        right: 8px;
+        background: rgba(0, 0, 0, 0.8);
         color: white;
-        padding: 3px 8px;
+        padding: 3px 6px;
         border-radius: 4px;
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 500;
-        letter-spacing: 0.5px;
       }
     }
-    .info {
-      padding: 18px 16px 14px 16px;
+    
+    .video-info {
       display: flex;
-      gap: 12px;
+      padding: 12px;
+      
+      .avatar {
+        margin-right: 12px;
+        
+        .avatar-circle {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          background: #eee;
+          overflow: hidden;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+      }
+      
       .details {
         flex: 1;
-        min-width: 0;
+        
         .title {
           font-size: 16px;
-          font-weight: 600;
-          color: #222;
+          font-weight: 500;
+          line-height: 1.4;
           margin: 0 0 6px;
           display: -webkit-box;
           -webkit-line-clamp: 2;
           -webkit-box-orient: vertical;
           overflow: hidden;
-          line-height: 1.5;
+          color: $text-color;
         }
-        .stats {
+        
+        .channel-name {
           font-size: 14px;
-          color: #6a82fb;
+          color: $text-secondary;
+          margin-bottom: 4px;
+        }
+        
+        .meta {
+          font-size: 14px;
+          color: $text-secondary;
           display: flex;
           align-items: center;
-          gap: 4px;
+          
           .dot {
-            font-size: 12px;
+            margin: 0 4px;
           }
         }
       }
     }
   }
-
-  @media (max-width: 1600px) {
-    &-grid {
-      grid-template-columns: repeat(3, 1fr);
+  
+  // 加载更多
+  .load-more-container {
+    display: flex;
+    justify-content: center;
+    margin-top: 40px;
+    padding-bottom: 40px;
+    
+    .load-more-btn {
+      padding: 12px 32px;
+      font-weight: 500;
+      font-size: 16px;
+      background-color: $primary-color;
+      border-color: $primary-color;
+      
+      &:hover {
+        background-color: darken($primary-color, 5%);
+      }
     }
   }
+  
+  // 响应式设计
   @media (max-width: 1200px) {
-    &-main {
-      gap: 0;
-    }
-    &-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
-    &-sidebar {
-      display: none;
-    }
-    &-content {
-      padding: 24px 8px;
+    .main-content {
+      padding: 24px;
     }
   }
+  
   @media (max-width: 768px) {
-    &-grid {
-      grid-template-columns: repeat(1, 1fr);
+    .mobile-menu-toggle {
+      display: flex;
     }
-    &-content {
-      padding: 8px 2px;
+    
+    .sidebar {
+      transform: translateX(-100%);
+      transition: transform 0.3s ease;
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+      
+      &.active {
+        transform: translateX(0);
+      }
     }
-  }
-}
-
-.test-image-container {
-  position: fixed;
-  top: 80px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1000;
-  background: white;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.1);
-  max-width: 90%;
-  width: 600px;
-
-  .error-alert {
-    margin-top: 10px;
-  }
-
-  .test-image {
-    max-width: 100%;
-    height: auto;
-    border-radius: 4px;
-    border: 1px solid #eee;
-  }
-
-  .image-url {
-    margin: 10px 0;
-    padding: 8px;
-    background: #f5f7fa;
-    border-radius: 4px;
-    font-size: 12px;
-    word-break: break-all;
-    max-height: 100px;
-    overflow-y: auto;
+    
+    .sidebar-overlay {
+      display: block;
+    }
+    
+    .main-content {
+      margin-left: 0;
+      padding: 16px;
+    }
+    
+    .content-header {
+      .page-title {
+        font-size: 24px;
+      }
+    }
+    
+    .video-grid {
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 16px;
+    }
   }
 }
 </style>

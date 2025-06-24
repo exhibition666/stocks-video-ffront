@@ -104,7 +104,7 @@ const handleSmsLogin = async () => {
 
 // --- 密码登录 ---
 const pwdFormRef = ref<FormInstance>()
-const pwdFormData = reactive({ mobile: '', password: '' })
+const pwdFormData = reactive({ mobile: '17705028921', password: '1234' })
 const pwdFormRules = reactive<FormRules>({
   mobile: [{ required: true, message: '请输入手机号', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }]

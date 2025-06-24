@@ -12,21 +12,23 @@ const router = createRouter({
   scrollBehavior: () => ({ left: 0, top: 0 })
 })
 
-/*
+// 需要登录才能访问的路由路径
+const authRoutes = ['/stocks-front/userDetail', '/stocks-front/vip_upgrade']
+
 // 全局前置守卫：未登录强制跳转到登录页
 router.beforeEach((to, from, next) => {
   // 登录页 path
   const loginPath = '/stocks-front/login'
   // 判断是否已登录
   const hasToken = !!getAccessToken()
-  // 如果未登录且不是在登录页，强制跳转到登录页
-  if (!hasToken && to.path !== loginPath) {
+  
+  // 如果未登录且访问的是需要登录的页面，强制跳转到登录页
+  if (!hasToken && authRoutes.some(path => to.path.startsWith(path))) {
     next(loginPath)
   } else {
     next()
   }
 })
-*/
 
 export const resetRouter = (): void => {
   const resetWhiteNameList = ['Root', 'NotFound']

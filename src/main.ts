@@ -40,6 +40,9 @@ import './permission'
 import '@/plugins/tongji' // 百度统计
 import Logger from '@/utils/Logger'
 
+// 引入用户活动监测
+import { startActivityMonitoring } from '@/utils/userActivity'
+
 import VueDOMPurifyHTML from 'vue-dompurify-html' // 解决v-html 的安全隐患
 
 // 创建实例
@@ -65,6 +68,9 @@ const setupAll = async () => {
   await router.isReady()
 
   app.use(VueDOMPurifyHTML)
+
+  // 启动用户活动监测
+  startActivityMonitoring()
 
   app.mount('#app')
 }

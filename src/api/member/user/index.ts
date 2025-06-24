@@ -15,6 +15,7 @@ export interface UserVO {
     icon: string
   }
   brokerageEnabled: boolean
+  vipExpireTime?: string // VIP到期时间
 }
 
 // 查询会员用户列表

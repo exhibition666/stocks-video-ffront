@@ -8,6 +8,7 @@ import { usePageLoading } from '@/hooks/web/usePageLoading'
 import { useDictStoreWithOut } from '@/store/modules/dict'
 import { useUserStoreWithOut } from '@/store/modules/user'
 import { usePermissionStoreWithOut } from '@/store/modules/permission'
+import { resetActivityTimer, startActivityMonitoring } from '@/utils/userActivity'
 
 const { start, done } = useNProgress()
 
@@ -60,6 +61,15 @@ const whiteList = [
 router.beforeEach(async (to, from, next) => {
   start()
   loadStart()
+  
+  // 重置用户活动计时器（每次路由切换视为用户活动）
+  resetActivityTimer()
+  
+  // 如果用户已登录，确保活动监测已启动
+  if (getAccessToken()) {
+    startActivityMonitoring()
+  }
+  
   // 只做页面加载动画和字典加载，不做任何token校验
   const dictStore = useDictStoreWithOut()
   if (!dictStore.getIsSetDict) {
