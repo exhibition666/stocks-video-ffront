@@ -198,8 +198,8 @@
   <UserPointUpdateForm ref="updatePointFormRef" @success="getList" />
   <!-- 修改用户余额弹窗 -->
   <UserBalanceUpdateForm ref="UpdateBalanceFormRef" @success="getList" />
-  <!-- 发送优惠券弹窗 -->
-  <CouponSendForm ref="couponSendFormRef" />
+  <!-- 发送优惠券弹窗 - 暂时移除 -->
+  <!-- <CouponSendForm ref="couponSendFormRef" /> -->
 </template>
 <script lang="ts" setup>
 import { dateFormatter } from '@/utils/formatTime'
@@ -212,7 +212,6 @@ import MemberGroupSelect from '@/views/member/group/components/MemberGroupSelect
 import UserLevelUpdateForm from './components/UserLevelUpdateForm.vue'
 import UserPointUpdateForm from './components/UserPointUpdateForm.vue'
 import UserBalanceUpdateForm from './components/UserBalanceUpdateForm.vue'
-import { CouponSendForm } from '@/views/mall/promotion/coupon/components'
 import { checkPermi } from '@/utils/permission'
 
 defineOptions({ name: 'MemberUser' })
@@ -287,7 +286,9 @@ const openCoupon = () => {
     message.warning('请选择要发送优惠券的用户')
     return
   }
-  couponSendFormRef.value.open(selectedIds.value)
+  // 由于组件不存在，暂时只显示提示信息
+  message.success(`已选择 ${selectedIds.value.length} 个用户，优惠券发送功能暂未实现`)
+  // couponSendFormRef.value.open(selectedIds.value)
 }
 
 /** 操作分发 */

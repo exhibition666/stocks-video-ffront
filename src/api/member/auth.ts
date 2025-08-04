@@ -20,8 +20,8 @@ export interface PasswordLoginReqVO {
 
 // 发送短信验证码
 export const sendSmsCode = (data: SendSmsCodeReqVO): Promise<boolean> => {
-  // scene: 1=登录, 2=改手机号, 3=修改密码, 4=重置密码
-  if (data.scene === 1 || data.scene === 2 || data.scene === 4) {
+  // scene: 24=登录/注册, 2=改手机号, 3=修改密码, 4=重置密码
+  if (data.scene === 24 || data.scene === 2 || data.scene === 4) {
   return request.post({
       url: '/member/auth/send-sms-code',
     data,

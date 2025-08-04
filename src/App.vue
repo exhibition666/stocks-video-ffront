@@ -33,7 +33,7 @@ let cleanupAuthDebugger: (() => void) | null = null
 onMounted(() => {
   // 启动登录状态调试器
   cleanupAuthDebugger = setupAuthDebugger()
-  console.log('全局登录状态调试已启动')
+  // console.log('全局登录状态调试已启动')
 
   // 自动同步 wsCache 到 userStore，保证刷新后登录态恢复
   const userStore = useUserStore()

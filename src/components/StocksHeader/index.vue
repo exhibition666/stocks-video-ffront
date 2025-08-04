@@ -6,21 +6,12 @@ import { StocksUserInfo } from '@/components/StocksUserInfo'
 import { useUserStore } from '@/store/modules/user'
 import { getAccessToken } from '@/utils/auth'
 import { useI18n } from '@/hooks/web/useI18n'
-import { Search } from '@element-plus/icons-vue'
 
 const { getPrefixCls } = useDesign()
 const prefixCls = getPrefixCls('stocks-header')
 const router = useRouter()
 const userStore = useUserStore()
 const { t } = useI18n()
-const searchKeyword = ref('')
-
-defineProps({
-  showSearch: {
-    type: Boolean,
-    default: true
-  }
-})
 
 // 判断用户是否已登录
 const isUserLoggedIn = computed(() => {
@@ -44,6 +35,14 @@ const goToHome = () => {
   router.push('/stocks-front/home')
 }
 
+const goToVideo = () => {
+  router.push('/stocks-front/video')
+}
+
+const goToInquiry = () => {
+  router.push('/stocks-front/inquiry')
+}
+
 const goToLogin = () => {
   router.push('/stocks-front/login')
 }
@@ -55,44 +54,32 @@ const goToUserDetail = () => {
 const goToVipUpgrade = () => {
   router.push('/stocks-front/vip_upgrade')
 }
-
-const handleSearch = () => {
-  console.log('搜索关键词：', searchKeyword.value)
-}
 </script>
 
 <template>
   <div :class="prefixCls">
     <div :class="`${prefixCls}-left`">
       <div class="logo-container" @click="goToHome">
-        <img src="@/assets/imgs/logo.png" alt="Logo" class="logo" />
-        <span class="title">NineTube</span>
+        <span class="title">股票期权系统</span>
+      </div>
+      
+      <div class="nav-links">
+        <router-link to="/stocks-front/home" class="nav-item" active-class="active">
+          <span>首页</span>
+        </router-link>
+        <router-link to="/stocks-front/inquiry" class="nav-item" active-class="active">
+          <span>期权询价</span>
+        </router-link>
+        <router-link to="/stocks-front/video" class="nav-item" active-class="active">
+          <span>视频教学</span>
+        </router-link>
+        <router-link v-if="isUserLoggedIn" to="/stocks-front/vip_upgrade" class="nav-item" active-class="active">
+          <span>购买VIP</span>
+        </router-link>
       </div>
     </div>
     
-    <div v-if="showSearch" :class="`${prefixCls}-search`">
-      <div class="search-container">
-        <el-input
-          v-model="searchKeyword"
-          placeholder="搜索视频、频道..."
-          :prefix-icon="Search"
-          @keyup.enter="handleSearch"
-          class="search-input"
-          clearable
-        >
-          <template #append>
-            <el-button :icon="Search" @click="handleSearch" class="search-button">
-              <span class="search-button-text">搜索</span>
-            </el-button>
-          </template>
-        </el-input>
-      </div>
-    </div>
     <div :class="`${prefixCls}-right`">
-      <div class="user-links" v-if="isUserLoggedIn">
-        <el-button type="text" @click="goToUserDetail" class="nav-link">个人资料</el-button>
-        <el-button type="text" @click="goToVipUpgrade" class="nav-link">购买VIP</el-button>
-      </div>
       <template v-if="isUserLoggedIn">
         <div class="user-level" v-if="levelName">
           <el-tag :type="isVipUser ? 'warning' : 'info'" effect="dark" round>{{ levelName }}</el-tag>
@@ -102,7 +89,7 @@ const handleSearch = () => {
       <template v-else>
         <el-button type="primary" @click="goToLogin" class="login-button">
           <i class="el-icon-user"></i>
-          登录
+          <span>登录</span>
         </el-button>
       </template>
     </div>
@@ -117,130 +104,96 @@ $prefix-cls: #{$namespace}-stocks-header;
   top: 0;
   left: 0;
   right: 0;
-  height: 60px;
-  padding: 0 24px;
-  background: #ffffff;
-  border-bottom: 1px solid #e5e5e5;
+  height: 70px;
+  padding: 0 32px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(232, 234, 237, 0.8);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  z-index: 100;
+  z-index: 1000;
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
 
   &-left {
     display: flex;
     align-items: center;
-    min-width: 120px;
 
     .logo-container {
       display: flex;
       align-items: center;
       cursor: pointer;
-      
-      &:hover .title {
-        color: #065fd4;
-      }
-    }
-    
-    .logo {
-      width: 36px;
-      height: 36px;
-    }
-    
-    .title {
-      font-size: 22px;
-      font-weight: 600;
-      color: #212121;
-      margin-left: 4px;
-      transition: color 0.2s;
-    }
-  }
+      margin-right: 40px;
+      transition: all 0.3s ease;
 
-  &-search {
-    flex: 1;
-    max-width: 640px;
-    margin: 0 10px;
-    
-    .search-container {
-      width: 100%;
-      position: relative;
-      
-      &::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        border-radius: 24px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-        pointer-events: none;
-        z-index: 1;
+      &:hover {
+        transform: scale(1.05);
+
+        .title {
+          color: #1a73e8;
+        }
       }
     }
-    
-    .search-input {
-      width: 100%;
-      
-      :deep(.el-input__wrapper) {
-        padding-left: 16px;
-        border-radius: 24px 0 0 24px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        transition: all 0.3s;
-        background-color: #f8f8f8;
-        
-        &.is-focus {
-          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-          background-color: #ffffff;
-        }
-      }
-      
-      :deep(.el-input__inner) {
-        height: 42px;
-        font-size: 15px;
-        
-        &::placeholder {
-          color: #909399;
-          font-size: 14px;
-        }
-      }
-      
-      :deep(.el-input__prefix) {
-        font-size: 18px;
-        color: #909399;
-      }
-      
-      :deep(.el-input__suffix) {
-        color: #909399;
-      }
-      
-      :deep(.el-input-group__append) {
-        border-radius: 0 24px 24px 0;
-        overflow: hidden;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-      }
-      
-      .search-button {
-        height: 42px;
-        background: linear-gradient(to right, #065fd4, #1976d2);
-        border: none;
-        padding: 0 20px;
-        transition: all 0.3s;
-        
-        .el-icon {
-          color: white;
-          font-size: 18px;
-          margin-right: 2px;
-        }
-        
-        .search-button-text {
-          color: white;
-          font-weight: 500;
-        }
-        
+
+
+
+    .title {
+      font-size: 26px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #1a73e8 0%, #34a853 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      transition: all 0.3s ease;
+      letter-spacing: -0.5px;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+
+      .nav-item {
+        padding: 12px 20px;
+        border-radius: 25px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        color: #5f6368;
+        transition: all 0.3s ease;
+        position: relative;
+        text-decoration: none;
+
         &:hover {
-          background: linear-gradient(to right, #0d47a1, #1565c0);
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+          background: linear-gradient(135deg, #f1f5ff 0%, #e8f0fe 100%);
+          color: #1a73e8;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(26, 115, 232, 0.15);
         }
+
+        &.active {
+          background: linear-gradient(135deg, #1a73e8 0%, #4285f4 100%);
+          color: white;
+          font-weight: 700;
+          box-shadow: 0 4px 15px rgba(26, 115, 232, 0.3);
+
+          &::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 6px;
+            height: 6px;
+            background: #34a853;
+            border-radius: 50%;
+          }
+        }
+
+
       }
     }
   }
@@ -248,86 +201,147 @@ $prefix-cls: #{$namespace}-stocks-header;
   &-right {
     display: flex;
     align-items: center;
-    gap: 16px;
-    
-    .user-links {
-      display: flex;
-      gap: 12px;
-      
-      .nav-link {
-        font-size: 14px;
-        color: #606060;
-        
-        &:hover {
-          color: #065fd4;
+    gap: 20px;
+
+    .user-level {
+      margin-right: 8px;
+
+      .el-tag {
+        font-weight: 700;
+        padding: 0 16px;
+        height: 32px;
+        line-height: 30px;
+        border-radius: 16px;
+        font-size: 13px;
+        border: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+
+        &.el-tag--warning {
+          background: linear-gradient(135deg, #fbbc04 0%, #ff9800 100%);
+          color: white;
+        }
+
+        &.el-tag--info {
+          background: linear-gradient(135deg, #9aa0a6 0%, #5f6368 100%);
+          color: white;
         }
       }
     }
-    
-    .user-level {
-      margin-right: 6px;
-      
-      .el-tag {
-        font-weight: 500;
-        padding: 0 12px;
-        height: 24px;
-        line-height: 22px;
-      }
-    }
-    
+
     .login-button {
       display: flex;
       align-items: center;
-      gap: 8px;
-      border-radius: 18px;
-      height: 36px;
-      padding: 0 16px;
-      background: transparent;
-      color: #065fd4;
-      border: 1px solid #065fd4;
-      
+      gap: 10px;
+      border-radius: 25px;
+      height: 44px;
+      padding: 0 24px;
+      background: linear-gradient(135deg, #1a73e8 0%, #4285f4 100%);
+      color: white;
+      border: none;
+      font-weight: 700;
+      font-size: 15px;
+      box-shadow: 0 4px 15px rgba(26, 115, 232, 0.3);
+      transition: all 0.3s ease;
+
       i {
-        font-size: 16px;
+        font-size: 18px;
       }
-      
+
       &:hover {
-        background-color: #e6f0ff;
+        background: linear-gradient(135deg, #1557b0 0%, #3367d6 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(26, 115, 232, 0.4);
       }
     }
   }
   
+  @media (max-width: 1024px) {
+    padding: 0 24px;
+
+    &-left {
+      .logo-container {
+        margin-right: 30px;
+      }
+
+      .nav-links .nav-item {
+        padding: 10px 16px;
+        font-size: 14px;
+      }
+    }
+  }
+
   @media (max-width: 768px) {
+    padding: 0 20px;
+    height: 60px;
+
+    &-left {
+      .logo-container {
+        margin-right: 20px;
+      }
+
+      .title {
+        font-size: 20px;
+      }
+
+      .nav-links .nav-item {
+        padding: 8px 12px;
+        font-size: 14px;
+
+        span {
+          display: block;
+        }
+      }
+    }
+
+    &-right {
+      gap: 12px;
+
+      .login-button {
+        height: 36px;
+        padding: 0 16px;
+        font-size: 14px;
+      }
+    }
+  }
+
+  @media (max-width: 576px) {
     padding: 0 16px;
-    
-    &-search {
-      max-width: 400px;
-      
-      .search-button-text {
+
+    &-left {
+      .title {
         display: none;
       }
-      
-      .search-button {
-        padding: 0 15px;
+
+      .nav-links .nav-item {
+        padding: 8px 10px;
+        border-radius: 20px;
+        font-size: 12px;
       }
     }
-    
-    &-left .title {
-      display: none;
-    }
-    
-    &-right .user-links {
-      display: none;
+
+    &-right {
+      .user-level .el-tag {
+        padding: 0 8px;
+        height: 28px;
+        line-height: 26px;
+        font-size: 12px;
+      }
+
+      .login-button {
+        height: 32px;
+        padding: 0 12px;
+        font-size: 13px;
+
+        span {
+          display: none;
+        }
+      }
     }
   }
-  
-  @media (max-width: 576px) {
-    &-left .nav-links .nav-item span {
-      display: none;
-    }
-    
-    &-left .nav-links .nav-item {
-      padding: 8px 10px;
-    }
-  }
+}
+
+@keyframes sparkle {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.1) rotate(5deg); }
 }
 </style> 

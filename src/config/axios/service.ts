@@ -102,7 +102,7 @@ service.interceptors.request.use(
   },
   (error: AxiosError) => {
     // Do something with request error
-    console.log(error) // for debug
+    // console.log(error) // for debug
     return Promise.reject(error)
   }
 )
@@ -139,7 +139,7 @@ service.interceptors.response.use(
       // 对于会员系统，401 可能是未登录状态，不需要弹窗
       // 检查是否是会员相关 API
       if (config.url && config.url.includes('/member/')) {
-        console.log('会员 API 未登录:', config.url)
+        // console.log('会员 API 未登录:', config.url)
         return Promise.reject('未登录，无权限访问')
       }
       // 对于非会员 API，尝试刷新 token
@@ -164,7 +164,7 @@ service.interceptors.response.use(
     } else if (code !== 200) {
       if (msg === '无效的刷新令牌') {
         // hard coding：忽略这个提示，直接登出
-        console.log(msg)
+        // console.log(msg)
         return handleAuthorized()
       } else {
         ElNotification.error({ title: msg })
@@ -175,7 +175,7 @@ service.interceptors.response.use(
     }
   },
   (error: AxiosError) => {
-    console.log('err' + error) // for debug
+    // console.log('err' + error) // for debug
     let { message } = error
     const { t } = useI18n()
     if (message === 'Network Error') {

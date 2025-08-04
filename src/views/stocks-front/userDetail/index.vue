@@ -103,10 +103,10 @@ const fetchMemberLevels = async () => {
     if (levels && levels.length > 0) {
       normalLevel.value = levels.reduce((min, level) => 
         level.id < min.id ? level : min, levels[0])
-      console.log('找到ID最小的会员等级:', normalLevel.value)
+      // console.log('找到ID最小的会员等级:', normalLevel.value)
     }
   } catch (error) {
-    console.error('获取会员等级列表失败:', error)
+    // console.error('获取会员等级列表失败:', error)
   }
 }
 
@@ -131,13 +131,13 @@ const fetchVipOrderRecords = async () => {
     if (response && response.list) {
       vipOrderRecords.value = response.list
       orderPagination.value.total = response.total || 0
-      console.log('获取到VIP订单记录:', vipOrderRecords.value)
+      // console.log('获取到VIP订单记录:', vipOrderRecords.value)
     } else {
       vipOrderRecords.value = []
       orderPagination.value.total = 0
     }
   } catch (error) {
-    console.error('获取VIP订单记录失败:', error)
+    // console.error('获取VIP订单记录失败:', error)
     ElMessage.error('获取VIP订单记录失败')
     vipOrderRecords.value = []
   } finally {
@@ -169,20 +169,20 @@ const handleStatusChange = (status: number | null) => {
 const checkVipExpiration = async () => {
   if (!userInfo.value) return
   
-  console.log('检查VIP过期状态...')
+      // console.log('检查VIP过期状态...')
   
   try {
     // 尝试从多个可能的字段名称获取VIP到期时间
     const vipExpireTime = userInfo.value.vipExpireTime || userInfo.value.vip_expire_time || userInfo.value.expireTime
     
     if (vipExpireTime) {
-      console.log('找到VIP到期时间:', vipExpireTime)
+      // console.log('找到VIP到期时间:', vipExpireTime)
       const now = new Date()
       const expireDate = new Date(vipExpireTime)
       
       // 判断是否已过期
       if (now > expireDate) {
-        console.log('VIP已过期，准备降级为普通用户')
+        // console.log('VIP已过期，准备降级为普通用户')
         
         // 如果会员等级列表未加载，先加载
         if (!normalLevel.value) {
@@ -195,7 +195,7 @@ const checkVipExpiration = async () => {
           
           // 如果当前不是最低等级，则只在前端进行降级处理
           if (currentLevelId !== normalLevel.value.id) {
-            console.log('执行前端降级操作，从', currentLevelId, '降级到', normalLevel.value.id)
+            // console.log('执行前端降级操作，从', currentLevelId, '降级到', normalLevel.value.id)
             
             // 更新本地用户信息
             userInfo.value.level = { 
@@ -213,17 +213,17 @@ const checkVipExpiration = async () => {
             // 移除VIP过期提示消息
             // ElMessage.warning('您的VIP会员已过期，已恢复为普通会员')
           } else {
-            console.log('用户已经是最低等级会员，无需降级')
+                            // console.log('用户已经是最低等级会员，无需降级')
           }
         }
       } else {
-        console.log('VIP未过期，到期时间:', expireDate.toISOString())
+        // console.log('VIP未过期，到期时间:', expireDate.toISOString())
       }
     } else {
-      console.log('用户无VIP到期时间记录，视为普通用户')
+              // console.log('用户无VIP到期时间记录，视为普通用户')
     }
   } catch (error) {
-    console.error('检查VIP过期出错:', error)
+    // console.error('检查VIP过期出错:', error)
   }
 }
 
@@ -244,7 +244,7 @@ const fetchUserInfo = async () => {
     await fetchVipOrderRecords()
   } catch (e) {
     ElMessage.error('获取会员信息失败')
-    console.error(e)
+    // console.error(e)
   } finally {
     loading.value = false
   }
@@ -259,14 +259,12 @@ const goBack = () => {
 
 // 编辑信息弹窗
 const editDialogVisible = ref(false)
-const editForm = ref({ nickname: '', avatar: '', sex: 1 })
+const editForm = ref({ nickname: '' })
 const editLoading = ref(false)
 const openEditDialog = () => {
   if (!userInfo.value) return
   editForm.value = {
-    nickname: userInfo.value.nickname || '',
-    avatar: userInfo.value.avatar || '',
-    sex: userInfo.value.sex || 1
+    nickname: userInfo.value.nickname || ''
   }
   editDialogVisible.value = true
 }
@@ -332,45 +330,68 @@ const sendCode = async () => {
         <el-tabs v-model="activeTab" class="user-tabs">
           <el-tab-pane label="基本信息" name="info">
         <div :class="`${prefixCls}-info`">
-          <div :class="`${prefixCls}-avatar-wrap`">
-                <el-avatar :size="120" :src="signedAvatarUrl || avatarImg" />
-                <el-button type="primary" :icon="Edit" size="small" @click="openEditDialog" class="edit-btn" round>编辑信息</el-button>
-          </div>
-          <div :class="`${prefixCls}-details`">
-            <el-descriptions title="会员信息" :column="2" border>
-              <el-descriptions-item label="昵称" v-if="userInfo?.nickname">{{ userInfo.nickname }}</el-descriptions-item>
-              <el-descriptions-item label="手机号" v-if="userInfo?.mobile">{{ userInfo.mobile }}</el-descriptions-item>
-              <el-descriptions-item label="性别" v-if="userInfo?.sex !== undefined && userInfo?.sex !== null">
-                    <el-tag v-if="userInfo.sex === 1" type="success" effect="light" round>男</el-tag>
-                    <el-tag v-else-if="userInfo.sex === 2" type="danger" effect="light" round>女</el-tag>
-                    <el-tag v-else type="info" effect="light" round>未知</el-tag>
-                  </el-descriptions-item>
-                  <el-descriptions-item label="会员等级" v-if="userInfo?.level && userInfo.level.name">
-                    <el-tag :type="isVipUser ? 'warning' : 'info'" effect="dark" round>
-                      {{ userInfo.level.name }}
-                    </el-tag>
-                  </el-descriptions-item>
-                  <el-descriptions-item label="经验值" v-if="userInfo?.experience !== undefined && userInfo?.experience !== null">
-                    <el-progress :percentage="userInfo.experience % 100" :format="() => userInfo.experience" />
-                  </el-descriptions-item>
-                  <el-descriptions-item label="当前积分" v-if="userInfo?.point !== undefined && userInfo?.point !== null">
-                    <span class="point-value">{{ userInfo.point }}</span>
-              </el-descriptions-item>
-                  <el-descriptions-item label="VIP到期时间" v-if="userInfo">
-                    <el-tag v-if="isVipExpired" type="danger" effect="dark" round>已过期</el-tag>
-                    <el-tag v-else-if="isVipUser" type="success" effect="dark" round>
-                      <el-icon><Calendar /></el-icon>
-                      {{ formattedExpireTime }}
-                    </el-tag>
-                    <el-tag v-else type="info" effect="light" round>普通会员</el-tag>
-              </el-descriptions-item>
-            </el-descriptions>
-                <div class="action-buttons">
-                  <el-button type="danger" :icon="Key" @click="pwdDialogVisible = true" round>修改密码</el-button>
-                  <el-button type="primary" @click="fetchUserInfo" round>刷新信息</el-button>
+          <div :class="`${prefixCls}-profile-card`">
+            <div class="profile-header">
+              <div class="user-avatar">
+                <div class="avatar-circle">
+                  <i class="el-icon-user"></i>
+                </div>
+              </div>
+              <div class="user-basic">
+                <h2 class="user-name">{{ userInfo?.nickname || '未设置昵称' }}</h2>
+                <div class="user-level">
+                  <el-tag :type="isVipUser ? 'warning' : 'info'" effect="dark" size="large">
+                    {{ userInfo?.level?.name || '普通会员' }}
+                  </el-tag>
                 </div>
               </div>
             </div>
+
+            <div class="profile-content">
+              <div class="info-grid">
+                <div class="info-item">
+                  <div class="info-label">
+                    <i class="el-icon-phone"></i>
+                    <span>手机号</span>
+                  </div>
+                  <div class="info-value">{{ userInfo?.mobile || '未绑定' }}</div>
+                </div>
+
+                <div class="info-item">
+                  <div class="info-label">
+                    <i class="el-icon-medal"></i>
+                    <span>会员等级</span>
+                  </div>
+                  <div class="info-value">
+                    <el-tag :type="isVipUser ? 'warning' : 'info'" effect="plain" round>
+                      {{ userInfo?.level?.name || '普通会员' }}
+                    </el-tag>
+                  </div>
+                </div>
+
+                <div class="info-item">
+                  <div class="info-label">
+                    <i class="el-icon-time"></i>
+                    <span>VIP到期时间</span>
+                  </div>
+                  <div class="info-value">
+                    <el-tag v-if="isVipExpired" type="danger" effect="dark" round>已过期</el-tag>
+                    <el-tag v-else-if="isVipUser" type="success" effect="dark" round>
+                      {{ formattedExpireTime }}
+                    </el-tag>
+                    <el-tag v-else type="info" effect="light" round>普通会员</el-tag>
+                  </div>
+                </div>
+              </div>
+
+              <div class="action-buttons">
+                <el-button type="primary" :icon="Edit" @click="openEditDialog" round>编辑信息</el-button>
+                <el-button type="danger" :icon="Key" @click="pwdDialogVisible = true" round>修改密码</el-button>
+                <el-button type="success" @click="fetchUserInfo" round>刷新信息</el-button>
+              </div>
+            </div>
+          </div>
+        </div>
           </el-tab-pane>
           
           <el-tab-pane label="VIP订单记录" name="orders">
@@ -464,83 +485,121 @@ const sendCode = async () => {
       </el-card>
 
       <!-- 编辑信息弹窗 -->
-      <el-dialog 
-        v-model="editDialogVisible" 
-        title="编辑会员信息" 
-        width="450px" 
+      <el-dialog
+        v-model="editDialogVisible"
+        width="480px"
         :close-on-click-modal="false"
         destroy-on-close
         center
-        class="custom-dialog"
+        class="edit-dialog"
       >
-        <el-form :model="editForm" label-width="80px">
-          <el-form-item label="昵称">
-            <el-input v-model="editForm.nickname" maxlength="20" placeholder="请输入昵称" />
-          </el-form-item>
-          <el-form-item label="头像">
-            <el-input v-model="editForm.avatar" placeholder="请输入头像URL" />
-            <div class="avatar-preview" v-if="editForm.avatar">
-              <img :src="editForm.avatar" alt="头像预览" />
+        <template #header>
+          <div class="dialog-header">
+            <div class="header-icon">
+              <i class="el-icon-edit"></i>
             </div>
-          </el-form-item>
-          <el-form-item label="性别">
-            <el-radio-group v-model="editForm.sex">
-              <el-radio :label="1">男</el-radio>
-              <el-radio :label="2">女</el-radio>
-            </el-radio-group>
-          </el-form-item>
-        </el-form>
+            <h3>编辑昵称</h3>
+            <p>修改您的显示昵称</p>
+          </div>
+        </template>
+
+        <div class="dialog-content">
+          <el-form :model="editForm" label-width="0" class="edit-form">
+            <div class="form-item">
+              <div class="input-label">
+                <i class="el-icon-user"></i>
+                <span>昵称</span>
+              </div>
+              <el-input
+                v-model="editForm.nickname"
+                maxlength="20"
+                placeholder="请输入昵称"
+                size="large"
+                class="custom-input"
+                show-word-limit
+              />
+              <div class="form-tip">昵称长度为1-20个字符</div>
+            </div>
+          </el-form>
+        </div>
+
         <template #footer>
           <div class="dialog-footer">
-            <el-button @click="editDialogVisible = false" round>取消</el-button>
-            <el-button type="primary" :loading="editLoading" @click="handleEditSubmit" round>保存</el-button>
+            <el-button @click="editDialogVisible = false" size="large" class="cancel-btn">取消</el-button>
+            <el-button type="primary" :loading="editLoading" @click="handleEditSubmit" size="large" class="confirm-btn">保存修改</el-button>
           </div>
         </template>
       </el-dialog>
 
       <!-- 修改密码弹窗 -->
-      <el-dialog 
-        v-model="pwdDialogVisible" 
-        title="修改密码" 
-        width="450px" 
+      <el-dialog
+        v-model="pwdDialogVisible"
+        width="500px"
         :close-on-click-modal="false"
         destroy-on-close
         center
-        class="custom-dialog"
+        class="password-dialog"
       >
-        <el-form :model="pwdForm" label-width="80px">
-          <el-form-item label="新密码">
-            <el-input 
-              v-model="pwdForm.password" 
-              type="password" 
-              show-password 
-              maxlength="32"
-              placeholder="请输入新密码"
-            />
-            <div class="form-tip">密码长度为8-32个字符，必须包含字母和数字</div>
-          </el-form-item>
-          <el-form-item label="验证码">
-            <div class="code-input-group">
-              <el-input 
-                v-model="pwdForm.code" 
-                maxlength="6" 
-                placeholder="请输入验证码"
-              />
-              <el-button 
-                :loading="sendCodeLoading" 
-                @click="sendCode" 
-                type="primary"
-                round
-              >
-                发送验证码
-              </el-button>
+        <template #header>
+          <div class="dialog-header">
+            <div class="header-icon">
+              <i class="el-icon-key"></i>
             </div>
-          </el-form-item>
-        </el-form>
+            <h3>修改密码</h3>
+            <p>为了您的账户安全，请设置新密码</p>
+          </div>
+        </template>
+
+        <div class="dialog-content">
+          <el-form :model="pwdForm" label-width="0" class="password-form">
+            <div class="form-item">
+              <div class="input-label">
+                <i class="el-icon-lock"></i>
+                <span>新密码</span>
+              </div>
+              <el-input
+                v-model="pwdForm.password"
+                type="password"
+                show-password
+                maxlength="32"
+                placeholder="请输入新密码"
+                size="large"
+                class="custom-input"
+              />
+              <div class="form-tip">密码长度为8-32个字符，必须包含字母和数字</div>
+            </div>
+
+            <div class="form-item">
+              <div class="input-label">
+                <i class="el-icon-message"></i>
+                <span>验证码</span>
+              </div>
+              <div class="code-input-group">
+                <el-input
+                  v-model="pwdForm.code"
+                  maxlength="6"
+                  placeholder="请输入验证码"
+                  size="large"
+                  class="custom-input"
+                />
+                <el-button
+                  :loading="sendCodeLoading"
+                  @click="sendCode"
+                  type="primary"
+                  size="large"
+                  class="send-code-btn"
+                >
+                  发送验证码
+                </el-button>
+              </div>
+            </div>
+          </el-form>
+        </div>
+
         <template #footer>
           <div class="dialog-footer">
-            <el-button @click="pwdDialogVisible = false" round>取消</el-button>
-            <el-button type="primary" :loading="pwdLoading" @click="handlePwdSubmit" round>确认修改</el-button>
+            <el-button @click="pwdDialogVisible = false" size="large" class="cancel-btn">取消</el-button>
+            <el-button type="primary" :loading="pwdLoading" @click="handlePwdSubmit" size="large" class="confirm-btn">确认修改</el-button>
           </div>
         </template>
       </el-dialog>
@@ -581,57 +640,153 @@ $prefix-cls: #{$namespace}-user-detail;
     }
   }
   &-info {
-    display: flex;
     margin-bottom: 30px;
-    @media (max-width: 768px) {
-      flex-direction: column;
-    }
   }
-  &-avatar-wrap {
-    margin-right: 40px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    position: relative;
-    .el-avatar {
-      margin-bottom: 15px;
-      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-      border: 4px solid #fff;
-    }
-    .edit-btn {
-      margin-top: 15px;
-    }
-    @media (max-width: 768px) {
-      margin-right: 0;
-      margin-bottom: 30px;
-    }
-  }
-  &-details {
-    flex: 1;
-    
-    :deep(.el-descriptions__body) {
-      width: 100%;
-    }
-    
-    :deep(.el-descriptions__label) {
-      background-color: #f8f9fb;
-      color: #606266;
-    }
-    
-    :deep(.el-tag) {
-      font-weight: 500;
-    }
-    
-    .point-value {
-      font-weight: bold;
-      color: #ff9900;
-      font-size: 16px;
-    }
-    
-    .action-buttons {
-      margin-top: 24px;
+
+  &-profile-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 20px;
+    padding: 0;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+
+    .profile-header {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      padding: 40px 30px;
       display: flex;
-      gap: 12px;
+      align-items: center;
+      gap: 30px;
+
+      .user-avatar {
+        .avatar-circle {
+          width: 100px;
+          height: 100px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.2);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 3px solid rgba(255, 255, 255, 0.3);
+
+          i {
+            font-size: 40px;
+            color: rgba(255, 255, 255, 0.9);
+          }
+        }
+      }
+
+      .user-basic {
+        flex: 1;
+
+        .user-name {
+          font-size: 28px;
+          font-weight: 700;
+          color: white;
+          margin: 0 0 15px 0;
+          text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .user-level {
+          :deep(.el-tag) {
+            font-size: 16px;
+            padding: 8px 16px;
+            font-weight: 600;
+          }
+        }
+      }
+    }
+
+    .profile-content {
+      background: white;
+      padding: 40px 30px;
+
+      .info-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 25px;
+        margin-bottom: 40px;
+
+        .info-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 20px;
+          background: #f8f9fa;
+          border-radius: 12px;
+          border-left: 4px solid #667eea;
+
+          .info-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            color: #495057;
+
+            i {
+              font-size: 18px;
+              color: #667eea;
+            }
+          }
+
+          .info-value {
+            font-weight: 500;
+            color: #212529;
+
+            :deep(.el-tag) {
+              font-weight: 600;
+            }
+          }
+        }
+      }
+
+      .action-buttons {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        flex-wrap: wrap;
+
+        .el-button {
+          min-width: 120px;
+          height: 44px;
+          font-weight: 600;
+
+          &.el-button--primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+
+            &:hover {
+              transform: translateY(-2px);
+              box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+            }
+          }
+        }
+      }
+    }
+
+    @media (max-width: 768px) {
+      .profile-header {
+        flex-direction: column;
+        text-align: center;
+        gap: 20px;
+        padding: 30px 20px;
+
+        .user-basic .user-name {
+          font-size: 24px;
+        }
+      }
+
+      .profile-content {
+        padding: 30px 20px;
+
+        .action-buttons {
+          flex-direction: column;
+
+          .el-button {
+            width: 100%;
+          }
+        }
+      }
     }
   }
 }
@@ -643,37 +798,37 @@ $prefix-cls: #{$namespace}-user-detail;
     margin-right: 0;
     text-align: center;
     border-bottom: 1px solid #ebeef5;
-    
+
     .el-dialog__title {
       font-size: 18px;
       font-weight: 600;
       color: #303133;
     }
   }
-  
+
   :deep(.el-dialog__body) {
     padding: 30px 25px;
   }
-  
+
   :deep(.el-dialog__footer) {
     padding: 15px 20px;
     border-top: 1px solid #ebeef5;
   }
-  
+
   .dialog-footer {
     display: flex;
     justify-content: center;
     gap: 15px;
-    
+
     .el-button {
       min-width: 100px;
     }
   }
-  
+
   .avatar-preview {
     margin-top: 10px;
     text-align: center;
-    
+
     img {
       width: 80px;
       height: 80px;
@@ -682,24 +837,194 @@ $prefix-cls: #{$namespace}-user-detail;
       border: 2px solid #ebeef5;
     }
   }
-  
+
   .form-tip {
     font-size: 12px;
     color: #909399;
     margin-top: 5px;
     line-height: 1.4;
   }
-  
+
   .code-input-group {
     display: flex;
     gap: 10px;
-    
+
     .el-input {
       flex: 1;
     }
-    
+
     .el-button {
       white-space: nowrap;
+    }
+  }
+}
+
+// 密码修改对话框样式
+.password-dialog {
+  :deep(.el-dialog) {
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  }
+
+  :deep(.el-dialog__header) {
+    padding: 0;
+    margin: 0;
+    border: none;
+  }
+
+  :deep(.el-dialog__body) {
+    padding: 0;
+  }
+
+  :deep(.el-dialog__footer) {
+    padding: 0;
+    border: none;
+  }
+
+  .dialog-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 40px 30px;
+    text-align: center;
+    color: white;
+
+    .header-icon {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+
+      i {
+        font-size: 36px;
+        color: white;
+      }
+    }
+
+    h3 {
+      font-size: 24px;
+      font-weight: 700;
+      margin: 0 0 10px 0;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    p {
+      font-size: 16px;
+      margin: 0;
+      opacity: 0.9;
+    }
+  }
+
+  .dialog-content {
+    padding: 40px 30px;
+    background: white;
+
+    .password-form {
+      .form-item {
+        margin-bottom: 30px;
+
+        .input-label {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 12px;
+          font-weight: 600;
+          color: #495057;
+
+          i {
+            font-size: 18px;
+            color: #667eea;
+          }
+        }
+
+        .custom-input {
+          :deep(.el-input__wrapper) {
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border: 2px solid #e9ecef;
+            transition: all 0.3s ease;
+
+            &:hover {
+              border-color: #667eea;
+            }
+
+            &.is-focus {
+              border-color: #667eea;
+              box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+            }
+          }
+        }
+
+        .form-tip {
+          font-size: 13px;
+          color: #6c757d;
+          margin-top: 8px;
+          padding-left: 12px;
+          line-height: 1.4;
+        }
+
+        .code-input-group {
+          display: flex;
+          gap: 12px;
+
+          .custom-input {
+            flex: 1;
+          }
+
+          .send-code-btn {
+            min-width: 120px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            font-weight: 600;
+
+            &:hover {
+              transform: translateY(-2px);
+              box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  .dialog-footer {
+    padding: 30px;
+    background: #f8f9fa;
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+
+    .el-button {
+      min-width: 120px;
+      height: 48px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 16px;
+    }
+
+    .cancel-btn {
+      background: white;
+      border: 2px solid #dee2e6;
+      color: #6c757d;
+
+      &:hover {
+        border-color: #adb5bd;
+        color: #495057;
+      }
+    }
+
+    .confirm-btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+      }
     }
   }
 }
@@ -810,6 +1135,152 @@ $prefix-cls: #{$namespace}-user-detail;
     
     .el-pagination__sizes {
       margin-left: 15px;
+    }
+  }
+}
+
+// 编辑信息对话框样式
+.edit-dialog {
+  :deep(.el-dialog) {
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  }
+
+  :deep(.el-dialog__header) {
+    padding: 0;
+    margin: 0;
+    border: none;
+  }
+
+  :deep(.el-dialog__body) {
+    padding: 0;
+  }
+
+  :deep(.el-dialog__footer) {
+    padding: 0;
+    border: none;
+  }
+
+  .dialog-header {
+    background: linear-gradient(135deg, #34a853 0%, #137333 100%);
+    padding: 40px 30px;
+    text-align: center;
+    color: white;
+
+    .header-icon {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+
+      i {
+        font-size: 36px;
+        color: white;
+      }
+    }
+
+    h3 {
+      font-size: 24px;
+      font-weight: 700;
+      margin: 0 0 10px 0;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    p {
+      font-size: 16px;
+      margin: 0;
+      opacity: 0.9;
+    }
+  }
+
+  .dialog-content {
+    padding: 40px 30px;
+    background: white;
+
+    .edit-form {
+      .form-item {
+        .input-label {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 12px;
+          font-weight: 600;
+          color: #495057;
+
+          i {
+            font-size: 18px;
+            color: #34a853;
+          }
+        }
+
+        .custom-input {
+          :deep(.el-input__wrapper) {
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border: 2px solid #e9ecef;
+            transition: all 0.3s ease;
+
+            &:hover {
+              border-color: #34a853;
+            }
+
+            &.is-focus {
+              border-color: #34a853;
+              box-shadow: 0 4px 12px rgba(52, 168, 83, 0.2);
+            }
+          }
+        }
+
+        .form-tip {
+          font-size: 13px;
+          color: #6c757d;
+          margin-top: 8px;
+          padding-left: 12px;
+          line-height: 1.4;
+        }
+      }
+    }
+  }
+
+  .dialog-footer {
+    padding: 30px;
+    background: #f8f9fa;
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+
+    .el-button {
+      min-width: 120px;
+      height: 48px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 16px;
+    }
+
+    .cancel-btn {
+      background: white;
+      border: 2px solid #dee2e6;
+      color: #6c757d;
+
+      &:hover {
+        border-color: #adb5bd;
+        color: #495057;
+      }
+    }
+
+    .confirm-btn {
+      background: linear-gradient(135deg, #34a853 0%, #137333 100%);
+      border: none;
+
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(52, 168, 83, 0.4);
+      }
     }
   }
 }

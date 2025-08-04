@@ -43,7 +43,19 @@ const remainingRouter: AppRouteRecordRaw[] = [
     path: '/stocks-front/home',
     component: () => import('@/views/stocks-front/home/index.vue'),
     name: 'StocksFrontHome',
-    meta: { title: '股票系统首页', hidden: true, noTagsView: true }
+    meta: { title: '股票期权首页', hidden: true, noTagsView: true }
+  },
+  {
+    path: '/stocks-front/video',
+    component: () => import('@/views/stocks-front/video/index.vue'),
+    name: 'StocksFrontVideo',
+    meta: { title: '期权视频教学', hidden: true, noTagsView: true }
+  },
+  {
+    path: '/stocks-front/inquiry',
+    component: () => import('@/views/stocks-front/inquiry/index.vue'),
+    name: 'StocksFrontInquiry',
+    meta: { title: '股票期权询价', hidden: true, noTagsView: true }
   },
   {
     path: '/stocks-front/filetest',

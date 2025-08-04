@@ -69,7 +69,7 @@ const handleDelete = async () => {
         // 失败的消息在 useOssDeleter 中已经提示
       } catch (error: any) {
         ElMessage.error(error.message || '操作失败')
-        console.error('删除文件时发生错误:', error)
+        // console.error('删除文件时发生错误:', error)
       } finally {
         loading.value = false
       }

@@ -193,7 +193,7 @@ const handleTimeUpdate = (event: Event) => {
 
 // 视频加载错误处理
 const handleVideoError = () => {
-  console.error('视频加载失败');
+      // console.error('视频加载失败');
   ElMessage.error('视频加载失败，请稍后再试');
 }
 
@@ -245,7 +245,7 @@ const getVideoDetail = async (id: number) => {
         await fetchCoverUrl(res.picUrl);
       }
     } catch (e) {
-      console.error('获取签名URL失败:', e);
+      // console.error('获取签名URL失败:', e);
     }
   } catch (e) {
     if (e && e.toString().includes('401')) {
@@ -294,28 +294,56 @@ watch(
 <template>
   <div class="video-detail-page">
     <StocksHeader />
+
+    <!-- 页面头部导航 -->
+    <div class="page-breadcrumb">
+      <div class="breadcrumb-container">
+        <el-breadcrumb separator="/">
+          <el-breadcrumb-item @click="$router.push('/stocks-front/home')">
+            <i class="el-icon-house"></i>
+            <span>首页</span>
+          </el-breadcrumb-item>
+          <el-breadcrumb-item @click="$router.push('/stocks-front/video')">
+            <i class="el-icon-video-play"></i>
+            <span>视频教学</span>
+          </el-breadcrumb-item>
+          <el-breadcrumb-item>
+            <span>{{ videoData?.title || '视频详情' }}</span>
+          </el-breadcrumb-item>
+        </el-breadcrumb>
+      </div>
+    </div>
+
     <div class="video-detail-container">
       <template v-if="loading">
         <div class="loading-container">
-          <el-skeleton :rows="6" animated />
-          <div class="skeleton-player"></div>
-          <el-skeleton :rows="3" animated />
+          <div class="loading-player"></div>
+          <div class="loading-content">
+            <el-skeleton :rows="3" animated />
+            <el-skeleton :rows="2" animated />
+          </div>
         </div>
       </template>
       <template v-else-if="errorMsg">
-        <el-result icon="error" :title="errorMsg">
-          <template #extra>
-            <el-button type="primary" @click="$router.push('/stocks-front/home')">返回首页</el-button>
-          </template>
-        </el-result>
+        <div class="error-container">
+          <div class="error-card">
+            <i class="el-icon-warning-outline"></i>
+            <h3>{{ errorMsg }}</h3>
+            <p>请检查网络连接或稍后重试</p>
+            <el-button type="primary" @click="$router.push('/stocks-front/home')">
+              <i class="el-icon-back"></i>
+              返回首页
+            </el-button>
+          </div>
+        </div>
       </template>
       <template v-else-if="videoData">
         <div class="video-content-layout">
           <!-- 左侧主区域 -->
           <div class="video-main-content">
             <!-- 视频播放器 -->
-            <div class="video-player-wrap">
-              <div class="video-container">
+            <div class="video-player-section">
+              <div class="player-container">
                 <!-- 使用普通HTML5视频元素 -->
                 <video
                   v-if="currentVideoUrl"
@@ -333,113 +361,154 @@ watch(
                   @contextmenu.prevent
                 ></video>
                 <el-image v-else :src="coverUrl" class="main-video-cover" fit="cover" @contextmenu.prevent />
-                
+
                 <!-- 自定义全屏按钮 -->
                 <div class="custom-video-controls" v-if="currentVideoUrl && !trialEnded">
                   <div class="fullscreen-button" @click="toggleFullScreen">
                     <i :class="isFullScreen ? 'el-icon-close' : 'el-icon-full-screen'"></i>
                   </div>
                 </div>
-                
+
                 <!-- 防止复制视频URL的遮罩层 -->
                 <div class="video-protection-overlay" @contextmenu.prevent></div>
-                
+
                 <!-- 试看结束遮罩 -->
                 <div v-if="trialEnded" class="trial-ended-overlay">
                   <div class="trial-ended-content">
-                    <i class="el-icon-lock"></i>
-                    <h3>试看结束</h3>
-                    <p>升级为VIP会员可观看完整内容</p>
+                    <div class="trial-icon">
+                      <i class="el-icon-lock"></i>
+                    </div>
+                    <h3>试看时间已结束</h3>
+                    <p>升级为VIP会员，解锁完整视频内容</p>
                     <div class="trial-ended-buttons">
-                      <el-button type="danger" @click="$router.push('/stocks-front/vip_upgrade')">
-                        <i class="el-icon-crown"></i> 立即升级VIP
+                      <el-button type="primary" size="large" @click="$router.push('/stocks-front/vip_upgrade')">
+                        <i class="el-icon-crown"></i>
+                        <span>立即升级VIP</span>
                       </el-button>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-            
+
             <!-- 视频信息区域 -->
             <div class="video-info-section">
-              <h1 class="video-title">{{ videoData.title }}</h1>
-              
-              <div class="video-meta-info">
-                <div class="video-meta-left">
-                  <div class="view-count">
+              <div class="video-header">
+                <h1 class="video-title">{{ videoData.title }}</h1>
+                <div class="video-status-badge">
+                  <el-tag v-if="!isVipUser && videoData.previewUrl" type="warning" effect="dark" size="large">
                     <i class="el-icon-view"></i>
-                    <span>{{ videoData.view || 0 }}次观看</span>
+                    预览版本
+                  </el-tag>
+                  <el-tag v-else-if="!isVipUser" type="warning" effect="dark" size="large">
+                    <i class="el-icon-time"></i>
+                    试看模式 ({{ previewDuration }}秒)
+                  </el-tag>
+                  <el-tag v-else type="success" effect="dark" size="large">
+                    <i class="el-icon-check"></i>
+                    VIP完整版本
+                  </el-tag>
+                </div>
+              </div>
+
+              <div class="video-meta-bar">
+                <div class="meta-stats">
+                  <div class="stat-item">
+                    <i class="el-icon-view"></i>
+                    <span>{{ videoData.view || 0 }} 次观看</span>
                   </div>
-                  <div class="video-category">
+                  <div class="stat-item" v-if="typeName">
                     <i class="el-icon-folder"></i>
                     <span>{{ typeName }}</span>
                   </div>
+                  <div class="stat-item">
+                    <i class="el-icon-time"></i>
+                    <span>{{ new Date().toLocaleDateString() }}</span>
+                  </div>
                 </div>
-                
-                <div class="video-meta-right">
-                  <div v-if="!isVipUser" class="vip-access-status">
-                    <el-tag v-if="videoData.previewUrl" type="warning" effect="dark">预览版本</el-tag>
-                    <el-tag v-else type="warning" effect="dark">试看模式 ({{ previewDuration }}秒)</el-tag>
-                    <el-button type="danger" size="small" @click="$router.push('/stocks-front/vip_upgrade')">
-                      升级VIP
-                    </el-button>
-                  </div>
-                  <div v-else class="vip-access-status">
-                    <el-tag type="success" effect="dark">VIP完整版本</el-tag>
-                  </div>
+
+                <div class="action-buttons" v-if="!isVipUser">
+                  <el-button type="primary" size="large" @click="$router.push('/stocks-front/vip_upgrade')">
+                    <i class="el-icon-crown"></i>
+                    <span>升级VIP解锁完整内容</span>
+                  </el-button>
                 </div>
               </div>
-              
+
               <!-- 视频描述 -->
-              <div class="video-description-card">
+              <div class="video-description-section">
                 <div class="description-header">
-                  <span class="description-title"><i class="el-icon-info"></i> 视频简介</span>
+                  <h3 class="section-title">
+                    <i class="el-icon-document"></i>
+                    视频简介
+                  </h3>
                   <div class="video-tags" v-if="videoData.tags">
-                    <el-tag 
-                      v-for="(tag, index) in videoData.tags.split(',')" 
-                      :key="index" 
-                      size="small" 
-                      effect="light" 
+                    <el-tag
+                      v-for="(tag, index) in videoData.tags.split(',')"
+                      :key="index"
+                      size="small"
+                      effect="plain"
                       class="tag-item"
                     >
-                      {{ tag }}
+                      {{ tag.trim() }}
                     </el-tag>
                   </div>
                 </div>
                 <div class="description-content">
                   <p v-if="videoData.description">{{ videoData.description }}</p>
-                  <p v-else class="no-desc">暂无视频简介</p>
+                  <div v-else class="no-description">
+                    <i class="el-icon-info"></i>
+                    <span>暂无视频简介</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-          
+
           <!-- 右侧推荐区域 -->
           <div class="video-sidebar">
-            <h3 class="sidebar-title">相关推荐</h3>
-            <div class="related-videos-list">
-              <div 
-                v-for="item in videoData.relatedVideos" 
-                :key="item.id" 
-                class="related-video-item"
-                @click="$router.push(`/stocks-front/videodetail/${item.id}`)"
-              >
-                <div class="related-thumbnail">
-                  <el-image :src="item.picUrl" fit="cover" @contextmenu.prevent />
-                  <div class="play-icon-overlay">
-                    <i class="el-icon-video-play"></i>
+            <div class="sidebar-card">
+              <div class="sidebar-header">
+                <h3 class="sidebar-title">
+                  <i class="el-icon-video-play"></i>
+                  相关推荐
+                </h3>
+              </div>
+
+              <div class="related-videos-list">
+                <div
+                  v-for="item in videoData.relatedVideos"
+                  :key="item.id"
+                  class="related-video-item"
+                  @click="$router.push(`/stocks-front/videodetail/${item.id}`)"
+                >
+                  <div class="related-thumbnail">
+                    <el-image :src="item.picUrl" fit="cover" @contextmenu.prevent />
+                    <div class="play-overlay">
+                      <i class="el-icon-video-play"></i>
+                    </div>
+                    <div class="video-duration">05:30</div>
+                  </div>
+                  <div class="related-content">
+                    <h4 class="related-title">{{ item.title }}</h4>
+                    <div class="related-meta">
+                      <span class="view-count">{{ item.view || 0 }} 次观看</span>
+                      <span class="upload-time">2天前</span>
+                    </div>
                   </div>
                 </div>
-                <div class="related-info">
-                  <div class="related-title">{{ item.title }}</div>
-                  <div class="related-meta">{{ item.view || 0 }}次观看</div>
+
+                <!-- 如果没有相关视频，显示提示 -->
+                <div v-if="!videoData.relatedVideos || videoData.relatedVideos.length === 0" class="no-related-content">
+                  <div class="empty-state">
+                    <i class="el-icon-video-camera-solid"></i>
+                    <h4>暂无相关推荐</h4>
+                    <p>系统正在为您寻找更多精彩内容</p>
+                    <el-button type="primary" plain @click="$router.push('/stocks-front/video')">
+                      浏览更多视频
+                    </el-button>
+                  </div>
                 </div>
-              </div>
-              
-              <!-- 如果没有相关视频，显示提示 -->
-              <div v-if="!videoData.relatedVideos || videoData.relatedVideos.length === 0" class="no-related">
-                <i class="el-icon-video-camera"></i>
-                <p>暂无相关推荐视频</p>
               </div>
             </div>
           </div>
@@ -450,57 +519,156 @@ watch(
 </template>
 
 <style scoped lang="scss">
+$primary-color: #1a73e8;
+$secondary-color: #34a853;
+$text-color: #2c3e50;
+$text-light: #5f6368;
+$bg-color: #ffffff;
+$bg-light: #f8f9fa;
+$border-color: #e8eaed;
+$shadow-light: 0 2px 8px rgba(0, 0, 0, 0.1);
+$shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.15);
+
 .video-detail-page {
-  background-color: #f9f9f9;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e8f0fe 100%);
   min-height: 100vh;
 }
 
+// 面包屑导航
+.page-breadcrumb {
+  background: white;
+  border-bottom: 1px solid $border-color;
+  padding: 16px 0;
+
+  .breadcrumb-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+  }
+
+  :deep(.el-breadcrumb) {
+    font-size: 14px;
+
+    .el-breadcrumb__item {
+      .el-breadcrumb__inner {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: $text-light;
+        transition: color 0.3s ease;
+
+        &:hover {
+          color: $primary-color;
+          cursor: pointer;
+        }
+
+        i {
+          font-size: 16px;
+        }
+      }
+
+      &:last-child .el-breadcrumb__inner {
+        color: $text-color;
+        font-weight: 500;
+      }
+    }
+  }
+}
+
 .video-detail-container {
-  max-width: 1280px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 80px 16px 40px;
+  padding: 30px 20px 40px;
 }
 
 // 加载状态样式
 .loading-container {
-  padding: 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  
-  .skeleton-player {
-    height: 400px;
-    background: #f5f7fa;
-    border-radius: 8px;
-    margin: 20px 0;
-  }
-}
-
-// YouTube风格布局
-.video-content-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
   gap: 24px;
+
+  .loading-player {
+    aspect-ratio: 16/9;
+    background: linear-gradient(90deg, #f0f2f5 25%, #f8f9fa 50%, #f0f2f5 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 16px;
+  }
+
+  .loading-content {
+    background: white;
+    padding: 24px;
+    border-radius: 16px;
+    box-shadow: $shadow-light;
+  }
+}
+
+// 错误状态
+.error-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+
+  .error-card {
+    background: white;
+    padding: 60px 40px;
+    border-radius: 20px;
+    box-shadow: $shadow-light;
+    text-align: center;
+    max-width: 500px;
+
+    i {
+      font-size: 64px;
+      color: #ff6b6b;
+      margin-bottom: 20px;
+    }
+
+    h3 {
+      font-size: 24px;
+      color: $text-color;
+      margin: 0 0 12px 0;
+      font-weight: 600;
+    }
+
+    p {
+      color: $text-light;
+      margin: 0 0 30px 0;
+      font-size: 16px;
+    }
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+// 主要布局
+.video-content-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 30px;
 }
 
 // 左侧主内容区域
 .video-main-content {
   display: flex;
   flex-direction: column;
+  gap: 24px;
 }
 
-// 视频播放器
-.video-player-wrap {
-  width: 100%;
-}
-
-.video-container {
-  position: relative;
-  width: 100%;
-  border-radius: 8px;
-  overflow: hidden;
-  background: #000;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+// 视频播放器区域
+.video-player-section {
+  .player-container {
+    position: relative;
+    width: 100%;
+    border-radius: 16px;
+    overflow: hidden;
+    background: #000;
+    box-shadow: $shadow-hover;
+    border: 1px solid $border-color;
+  }
 }
 
 .main-video-player {
@@ -571,135 +739,201 @@ watch(
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.85);
   z-index: 20;
   display: flex;
   align-items: center;
   justify-content: center;
-  
+
   .trial-ended-content {
     text-align: center;
-    color: #fff;
-    padding: 30px;
-    background: rgba(0, 0, 0, 0.5);
-    border-radius: 16px;
-    backdrop-filter: blur(5px);
+    color: white;
+    padding: 50px 40px;
+    background: rgba(0, 0, 0, 0.8);
+    border-radius: 20px;
+    backdrop-filter: blur(10px);
     max-width: 90%;
-    
-    i {
-      font-size: 48px;
-      color: #fc5c7d;
-      margin-bottom: 16px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+
+    .trial-icon {
+      width: 80px;
+      height: 80px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+
+      i {
+        font-size: 40px;
+        color: white;
+      }
     }
-    
+
     h3 {
-      font-size: 24px;
-      margin: 0 0 12px;
-      font-weight: 600;
+      font-size: 28px;
+      margin: 0 0 16px;
+      font-weight: 700;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
     }
 
     p {
-      font-size: 16px;
-      margin: 0 0 24px;
-      opacity: 0.9;
+      font-size: 18px;
+      margin: 0 0 32px;
+      opacity: 0.95;
+      line-height: 1.5;
     }
-    
+
     .trial-ended-buttons {
       display: flex;
       justify-content: center;
-      gap: 16px;
+
+      .el-button {
+        padding: 16px 32px;
+        font-size: 16px;
+        font-weight: 600;
+        border-radius: 25px;
+
+        i {
+          margin-right: 8px;
+          font-size: 18px;
+        }
+      }
     }
   }
 }
 
 // 视频信息区域
 .video-info-section {
-  background: #fff;
-  border-radius: 8px;
-  padding: 20px;
-  margin-top: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  background: white;
+  border-radius: 16px;
+  padding: 30px;
+  box-shadow: $shadow-light;
+  border: 1px solid $border-color;
 }
 
-.video-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #030303;
-  margin: 0 0 12px 0;
-  line-height: 1.4;
-}
-
-.video-meta-info {
+.video-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #e5e5e5;
-}
+  align-items: flex-start;
+  margin-bottom: 24px;
+  gap: 20px;
 
-.video-meta-left {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  color: #606060;
-  font-size: 14px;
-  
-  .view-count, .video-category {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    
-    i {
-      font-size: 16px;
+  .video-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: $text-color;
+    margin: 0;
+    line-height: 1.3;
+    flex: 1;
+  }
+
+  .video-status-badge {
+    flex-shrink: 0;
+
+    .el-tag {
+      padding: 8px 16px;
+      font-weight: 600;
+
+      i {
+        margin-right: 6px;
+      }
     }
   }
 }
 
-.video-meta-right {
-  .vip-access-status {
+.video-meta-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 0;
+  border-top: 1px solid $border-color;
+  border-bottom: 1px solid $border-color;
+  margin-bottom: 24px;
+
+  .meta-stats {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 24px;
+
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: $text-light;
+      font-size: 14px;
+
+      i {
+        font-size: 16px;
+        color: $primary-color;
+      }
+    }
+  }
+
+  .action-buttons {
+    .el-button {
+      padding: 12px 24px;
+      font-weight: 600;
+      border-radius: 25px;
+
+      i {
+        margin-right: 8px;
+      }
+    }
   }
 }
 
-// 视频描述卡片
-.video-description-card {
-  background: #f9f9f9;
-  border-radius: 8px;
-  padding: 16px;
-  
+// 视频描述区域
+.video-description-section {
+  background: $bg-light;
+  border-radius: 12px;
+  padding: 24px;
+
   .description-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: 20px;
     flex-wrap: wrap;
-    gap: 12px;
-  }
-  
-  .description-title {
-    font-weight: 600;
-    font-size: 16px;
-    color: #030303;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    
-    i {
-      color: #606060;
+    gap: 16px;
+
+    .section-title {
+      font-weight: 600;
+      font-size: 18px;
+      color: $text-color;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      i {
+        color: $primary-color;
+        font-size: 20px;
+      }
     }
   }
-  
+
   .description-content {
-    color: #0f0f0f;
-    font-size: 14px;
-    line-height: 1.5;
-    
-    .no-desc {
-      color: #909090;
+    color: $text-color;
+    font-size: 15px;
+    line-height: 1.6;
+
+    p {
+      margin: 0;
+    }
+
+    .no-description {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: $text-light;
       font-style: italic;
+
+      i {
+        font-size: 16px;
+      }
     }
   }
 }
@@ -708,172 +942,327 @@ watch(
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  
+
   .tag-item {
     margin: 0;
+    border-radius: 20px;
+    border: 1px solid $border-color;
+    background: white;
+
+    &:hover {
+      border-color: $primary-color;
+      color: $primary-color;
+    }
   }
 }
 
 // 右侧推荐区域
 .video-sidebar {
-  .sidebar-title {
-    font-size: 16px;
-    font-weight: 600;
-    margin: 0 0 16px 0;
-    color: #030303;
+  .sidebar-card {
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: $shadow-light;
+    border: 1px solid $border-color;
+
+    .sidebar-header {
+      margin-bottom: 20px;
+
+      .sidebar-title {
+        font-size: 20px;
+        font-weight: 700;
+        margin: 0;
+        color: $text-color;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+
+        i {
+          color: $primary-color;
+          font-size: 22px;
+        }
+      }
+    }
   }
 }
 
 .related-videos-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .related-video-item {
   display: flex;
   gap: 12px;
   cursor: pointer;
-  
+  padding: 12px;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+
   &:hover {
-    .related-thumbnail img {
-      transform: scale(1.05);
+    background: $bg-light;
+    transform: translateY(-2px);
+
+    .related-thumbnail {
+      :deep(.el-image img) {
+        transform: scale(1.05);
+      }
+
+      .play-overlay {
+        opacity: 1;
+      }
     }
-    
-    .play-icon-overlay {
-      opacity: 1;
-    }
-    
+
     .related-title {
-      color: #065fd4;
+      color: $primary-color;
     }
   }
 }
 
 .related-thumbnail {
   position: relative;
-  width: 168px;
-  height: 94px;
-  border-radius: 8px;
+  width: 140px;
+  height: 78px;
+  border-radius: 10px;
   overflow: hidden;
   flex-shrink: 0;
-  
-  img {
+
+  :deep(.el-image) {
     width: 100%;
     height: 100%;
-    object-fit: cover;
-    transition: transform 0.3s;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.3s ease;
+    }
+  }
+
+  .play-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+
+    i {
+      font-size: 24px;
+      color: white;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    }
+  }
+
+  .video-duration {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
   }
 }
 
-.play-icon-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.3s;
-  
-  i {
-    font-size: 28px;
-    color: #fff;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
-  }
-}
-
-.related-info {
+.related-content {
   display: flex;
   flex-direction: column;
   flex-grow: 1;
   min-width: 0;
+  justify-content: center;
 }
 
 .related-title {
   font-size: 14px;
-  font-weight: 500;
-  color: #0f0f0f;
-  margin-bottom: 4px;
-  transition: color 0.2s;
+  font-weight: 600;
+  color: $text-color;
+  margin-bottom: 8px;
+  transition: color 0.3s ease;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  line-height: 1.3;
 }
 
 .related-meta {
-  font-size: 12px;
-  color: #606060;
-}
-
-.no-related {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 30px;
-  color: #606060;
-  background: #f9f9f9;
-  border-radius: 8px;
-  text-align: center;
-  
-  i {
-    font-size: 32px;
-    margin-bottom: 12px;
-    opacity: 0.7;
+  gap: 4px;
+  font-size: 12px;
+  color: $text-light;
+
+  .view-count, .upload-time {
+    display: block;
   }
-  
-  p {
-    margin: 0;
+}
+
+.no-related-content {
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    text-align: center;
+
+    i {
+      font-size: 48px;
+      color: $text-light;
+      margin-bottom: 16px;
+      opacity: 0.7;
+    }
+
+    h4 {
+      font-size: 18px;
+      color: $text-color;
+      margin: 0 0 8px 0;
+      font-weight: 600;
+    }
+
+    p {
+      color: $text-light;
+      margin: 0 0 20px 0;
+      font-size: 14px;
+    }
   }
 }
 
 // 响应式调整
+@media (max-width: 1200px) {
+  .video-detail-container {
+    padding: 20px 16px 40px;
+  }
+
+  .video-content-layout {
+    gap: 20px;
+  }
+}
+
 @media (max-width: 992px) {
   .video-content-layout {
     grid-template-columns: 1fr;
   }
-  
+
+  .loading-container {
+    grid-template-columns: 1fr;
+  }
+
   .video-sidebar {
-    margin-top: 24px;
+    .sidebar-card {
+      margin-top: 0;
+    }
   }
 }
 
 @media (max-width: 768px) {
-  .video-detail-container {
-    padding: 80px 12px 30px;
-  }
-  
-  .video-meta-info {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-  
-  .video-meta-right {
-    width: 100%;
-    
-    .vip-access-status {
-      justify-content: space-between;
-      width: 100%;
+  .page-breadcrumb {
+    .breadcrumb-container {
+      padding: 0 16px;
     }
   }
-  
+
+  .video-detail-container {
+    padding: 20px 12px 30px;
+  }
+
+  .video-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+
+    .video-title {
+      font-size: 20px;
+    }
+  }
+
+  .video-meta-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+
+    .meta-stats {
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .action-buttons {
+      width: 100%;
+
+      .el-button {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+  }
+
   .related-video-item {
     .related-thumbnail {
       width: 120px;
       height: 67px;
     }
   }
-  
+
   .description-header {
     flex-direction: column;
     align-items: flex-start;
+    gap: 12px;
+  }
+
+  .trial-ended-overlay {
+    .trial-ended-content {
+      padding: 30px 20px;
+      margin: 0 16px;
+
+      h3 {
+        font-size: 22px;
+      }
+
+      p {
+        font-size: 16px;
+      }
+    }
+  }
+}
+
+@media (max-width: 576px) {
+  .video-info-section {
+    padding: 20px;
+  }
+
+  .video-description-section {
+    padding: 16px;
+  }
+
+  .video-sidebar .sidebar-card {
+    padding: 16px;
+  }
+
+  .related-video-item {
+    padding: 8px;
+
+    .related-thumbnail {
+      width: 100px;
+      height: 56px;
+    }
+
+    .related-title {
+      font-size: 13px;
+    }
+
+    .related-meta {
+      font-size: 11px;
+    }
   }
 }
 </style>

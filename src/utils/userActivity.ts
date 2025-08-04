@@ -30,7 +30,7 @@ const checkIdle = () => {
   const idleTime = currentTime - lastActivityTime
 
   if (getAccessToken() && idleTime >= IDLE_TIMEOUT) {
-    console.log('用户已空闲超过5分钟，自动登出')
+    // console.log('用户已空闲超过5分钟，自动登出')
     
     // 停止监听
     stopMonitoring()
@@ -50,7 +50,7 @@ export const startActivityMonitoring = () => {
   // 只有登录状态才监测
   if (!getAccessToken()) return
   
-  console.log('开始监测用户活动')
+  // console.log('开始监测用户活动')
   
   // 记录初始活动时间
   lastActivityTime = Date.now()
@@ -69,7 +69,7 @@ export const startActivityMonitoring = () => {
 export const stopMonitoring = () => {
   if (!isMonitoring.value) return
   
-  console.log('停止监测用户活动')
+  // console.log('停止监测用户活动')
   
   // 移除事件监听器
   USER_EVENTS.forEach(event => {

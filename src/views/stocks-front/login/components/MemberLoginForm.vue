@@ -24,19 +24,49 @@
           登录 / 注册
         </el-button>
       </el-form-item>
+      <el-form-item>
+        <el-button size="large" @click="goToHome" class="w-full back-home-button">
+          <i class="el-icon-house"></i>
+          <span>返回首页</span>
+        </el-button>
+      </el-form-item>
     </el-form>
 
     <!-- 密码登录 -->
-    <el-form v-show="activeTab === 'password'" ref="pwdFormRef" :model="pwdFormData" :rules="pwdFormRules" class="login-form">
+    <el-form v-show="activeTab === 'password'" ref="pwdFormRef" :model="pwdFormData" :rules="pwdFormRules" class="login-form" autocomplete="off">
+      <!-- 隐藏的假输入框，用于欺骗浏览器自动填充 -->
+      <input type="text" style="display: none;" autocomplete="username" />
+      <input type="password" style="display: none;" autocomplete="current-password" />
+
       <el-form-item prop="mobile">
-        <el-input v-model="pwdFormData.mobile" size="large" placeholder="请输入手机号" />
+        <el-input
+          v-model="pwdFormData.mobile"
+          size="large"
+          placeholder="请输入手机号"
+          autocomplete="off"
+          name="fake-username"
+        />
       </el-form-item>
       <el-form-item prop="password">
-        <el-input v-model="pwdFormData.password" type="password" size="large" show-password placeholder="请输入密码" />
+        <el-input
+          v-model="pwdFormData.password"
+          type="password"
+          size="large"
+          show-password
+          placeholder="请输入密码"
+          autocomplete="new-password"
+          name="fake-password"
+        />
       </el-form-item>
       <el-form-item>
         <el-button type="primary" size="large" :loading="loading" @click="handlePasswordLogin" class="w-full">
           登录
+        </el-button>
+      </el-form-item>
+      <el-form-item>
+        <el-button size="large" @click="goToHome" class="w-full back-home-button">
+          <i class="el-icon-house"></i>
+          <span>返回首页</span>
         </el-button>
       </el-form-item>
     </el-form>
@@ -57,6 +87,11 @@ const loading = ref(false)
 const router = useRouter()
 const userStore = useUserStore()
 
+// 返回首页
+const goToHome = () => {
+  router.push('/stocks-front/home')
+}
+
 // --- 短信登录 ---
 const smsFormRef = ref<FormInstance>()
 const smsFormData = reactive({ mobile: '', code: '' })
@@ -71,7 +106,7 @@ const handleSendSmsCode = async () => {
   await smsFormRef.value?.validateField('mobile')
   smsCodeDisabled.value = true
   try {
-    await sendSmsCode({ mobile: smsFormData.mobile, scene: 1 }) // scene 21 for login/register
+    await sendSmsCode({ mobile: smsFormData.mobile, scene: 24 }) // scene 24 for login/register
     ElMessage.success('验证码发送成功！')
     // 倒计时
     let count = 60
@@ -104,7 +139,7 @@ const handleSmsLogin = async () => {
 
 // --- 密码登录 ---
 const pwdFormRef = ref<FormInstance>()
-const pwdFormData = reactive({ mobile: '17705028921', password: '1234' })
+const pwdFormData = reactive({ mobile: '', password: '' }) // 清空默认值
 const pwdFormRules = reactive<FormRules>({
   mobile: [{ required: true, message: '请输入手机号', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
@@ -123,34 +158,34 @@ const handlePasswordLogin = async () => {
 
 // --- 通用登录成功处理 ---
 const handleLoginSuccess = (res) => {
-  console.group('===== 登录成功处理 =====')
-  console.log('登录API响应:', res)
+  // console.group('===== 登录成功处理 =====')
+  // console.log('登录API响应:', res)
   
-  console.log('设置 token 前的状态:')
+  // console.log('设置 token 前的状态:')
   debugAuthState()
   
   // 设置 token
   setToken(res)
-  console.log('设置 token 后的状态:')
+  // console.log('设置 token 后的状态:')
   debugAuthState()
   
   // 强制延迟一下，确保 token 已经被设置
   setTimeout(() => {
     // 更新用户信息 - 使用 setMemberInfo 而不是 setUserInfoAction
     userStore.setMemberInfo().then(() => {
-      console.log('更新会员信息后的状态:')
+      // console.log('更新会员信息后的状态:')
       debugAuthState()
       
       ElMessage.success('登录成功')
       router.push({ path: '/stocks-front/home' }) // 跳转到前台首页
-      console.groupEnd()
+      // console.groupEnd()
     }).catch(error => {
-      console.error('更新会员信息失败:', error)
-      console.groupEnd()
+      // console.error('更新会员信息失败:', error)
+      // console.groupEnd()
       
       // 即使获取会员信息失败，也允许用户登录成功
-  ElMessage.success('登录成功')
-  router.push({ path: '/stocks-front/home' }) // 跳转到前台首页
+      ElMessage.success('登录成功')
+      router.push({ path: '/stocks-front/home' }) // 跳转到前台首页
     })
   }, 300) // 延迟300ms
 }
@@ -164,6 +199,23 @@ const handleLoginSuccess = (res) => {
 
   .login-form {
     margin-top: 20px;
+  }
+
+  .back-home-button {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #666;
+    transition: all 0.3s ease;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.5);
+      color: #333;
+    }
+
+    i {
+      margin-right: 6px;
+    }
   }
 }
 </style> 

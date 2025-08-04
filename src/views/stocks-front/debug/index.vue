@@ -268,7 +268,7 @@ const cookiesData = computed(() => {
 // 刷新调试信息
 const refreshDebugInfo = () => {
   debugInfo.value = debugAuthState()
-  console.log('调试页面刷新数据:', debugInfo.value)
+      // console.log('调试页面刷新数据:', debugInfo.value)
 }
 
 // 页面加载时获取调试信息
@@ -324,7 +324,7 @@ const checkVipExpiration = async () => {
     ElMessage.success('VIP过期检查完成')
     refreshDebugInfo()
   } catch (error) {
-    console.error('VIP过期检查失败:', error)
+    // console.error('VIP过期检查失败:', error)
     ElMessage.error('VIP过期检查失败')
   }
 }
@@ -336,7 +336,7 @@ const refreshUserInfo = async () => {
     ElMessage.success('用户信息刷新成功')
     refreshDebugInfo()
   } catch (error) {
-    console.error('用户信息刷新失败:', error)
+    // console.error('用户信息刷新失败:', error)
     ElMessage.error('用户信息刷新失败')
   }
 }
@@ -349,24 +349,24 @@ const printUserObject = () => {
   }
   
   console.group('===== 用户对象详情 =====')
-  console.log('完整用户对象:', userStore.user)
-  console.log('JSON格式用户对象:', JSON.stringify(userStore.user, null, 2))
+      // console.log('完整用户对象:', userStore.user)
+    // console.log('JSON格式用户对象:', JSON.stringify(userStore.user, null, 2))
   
   // 列出所有属性
-  console.log('===== 用户对象的所有属性 =====')
+      // console.log('===== 用户对象的所有属性 =====')
   for (const key in userStore.user) {
-    console.log(`${key}:`, userStore.user[key])
+          // console.log(`${key}:`, userStore.user[key])
   }
   
   // 检查缓存
   const cachedUser = wsCache.get(CACHE_KEY.USER)?.user
   if (cachedUser) {
-    console.log('===== 缓存中的用户对象 =====')
-    console.log('缓存用户对象:', cachedUser)
+    // console.log('===== 缓存中的用户对象 =====')
+    // console.log('缓存用户对象:', cachedUser)
     
     // 比较是否一致
-    console.log('缓存与当前对象是否相同:', 
-      JSON.stringify(cachedUser) === JSON.stringify(userStore.user) ? '完全一致' : '不一致')
+          // console.log('缓存与当前对象是否相同:', 
+              // JSON.stringify(cachedUser) === JSON.stringify(userStore.user) ? '完全一致' : '不一致')
   }
   
   console.groupEnd()
@@ -386,8 +386,8 @@ const fetchOriginalUserData = async () => {
     // 方法1: 使用封装的API
     console.group('===== 方法1: 使用封装的API获取用户数据 =====')
     const userData1 = await getCurrentUser()
-    console.log('API返回的原始用户数据:', userData1)
-    console.log('JSON格式:', JSON.stringify(userData1, null, 2))
+          // console.log('API返回的原始用户数据:', userData1)
+      // console.log('JSON格式:', JSON.stringify(userData1, null, 2))
     console.groupEnd()
     
     // 方法2: 直接使用axios调用原始接口
@@ -398,34 +398,34 @@ const fetchOriginalUserData = async () => {
         'Authorization': 'Bearer ' + token
       }
     })
-    console.log('Axios直接调用的结果:', response.data)
-    console.log('JSON格式:', JSON.stringify(response.data, null, 2))
+          // console.log('Axios直接调用的结果:', response.data)
+      // console.log('JSON格式:', JSON.stringify(response.data, null, 2))
     console.groupEnd()
     
     // 对比两种方式的结果是否一致
     console.group('===== 对比store中的用户数据和API返回数据 =====')
-    console.log('Store中的用户数据:', userStore.user)
-    console.log('API返回的用户数据:', userData1)
-    console.log('两者是否一致:', JSON.stringify(userStore.user) === JSON.stringify(userData1) ? '完全一致' : '不一致')
+          // console.log('Store中的用户数据:', userStore.user)
+      // console.log('API返回的用户数据:', userData1)
+      // console.log('两者是否一致:', JSON.stringify(userStore.user) === JSON.stringify(userData1) ? '完全一致' : '不一致')
     
     // 查找后端返回的字段
-    console.log('===== API返回数据中的所有字段 =====')
+          // console.log('===== API返回数据中的所有字段 =====')
     for (const key in userData1) {
-      console.log(`${key}:`, userData1[key])
+              // console.log(`${key}:`, userData1[key])
     }
     
     // 对比缓存中的数据
     const cachedUser = wsCache.get(CACHE_KEY.USER)?.user
     if (cachedUser) {
-      console.log('===== 缓存中的数据和API返回数据对比 =====')
-      console.log('缓存中的用户数据:', cachedUser)
-      console.log('两者是否一致:', JSON.stringify(cachedUser) === JSON.stringify(userData1) ? '完全一致' : '不一致')
+      // console.log('===== 缓存中的数据和API返回数据对比 =====')
+      // console.log('缓存中的用户数据:', cachedUser)
+      // console.log('两者是否一致:', JSON.stringify(cachedUser) === JSON.stringify(userData1) ? '完全一致' : '不一致')
     }
     console.groupEnd()
     
     ElMessage.success('原始用户数据已在控制台输出')
   } catch (error) {
-    console.error('获取原始用户数据失败:', error)
+    // console.error('获取原始用户数据失败:', error)
     ElMessage.error('获取原始用户数据失败')
   }
 }
@@ -490,7 +490,7 @@ const applyTestExpireTime = async () => {
     
     ElMessage.success('测试VIP过期时间已应用')
   } catch (error) {
-    console.error('应用测试时间失败:', error)
+    // console.error('应用测试时间失败:', error)
     ElMessage.error('应用测试时间失败')
   }
 }
@@ -514,7 +514,7 @@ const forceUpdateUserData = async () => {
     })
     
     const userData = response.data.data
-    console.log('API返回的原始用户数据:', userData)
+          // console.log('API返回的原始用户数据:', userData)
     
     if (!userData) {
       ElMessage.error('API返回的用户数据为空')
@@ -522,7 +522,7 @@ const forceUpdateUserData = async () => {
     }
     
     // 打印API返回的vipExpireTime字段
-    console.log('API返回的vipExpireTime:', userData.vipExpireTime)
+          // console.log('API返回的vipExpireTime:', userData.vipExpireTime)
     
     // 强制更新store中的用户数据
     userStore.user = userData
@@ -539,7 +539,7 @@ const forceUpdateUserData = async () => {
     
     ElMessage.success('用户数据已强制更新')
   } catch (error) {
-    console.error('强制更新用户数据失败:', error)
+    // console.error('强制更新用户数据失败:', error)
     ElMessage.error('强制更新用户数据失败')
   }
 }
@@ -558,10 +558,10 @@ const fetchMemberLevels = async () => {
     if (levels && levels.length > 0) {
       normalLevel.value = levels.reduce((min, level) => 
         level.id < min.id ? level : min, levels[0])
-      console.log('找到ID最小的会员等级:', normalLevel.value)
+      // console.log('找到ID最小的会员等级:', normalLevel.value)
     }
   } catch (error) {
-    console.error('获取会员等级列表失败:', error)
+    // console.error('获取会员等级列表失败:', error)
     ElMessage.error('获取会员等级列表失败')
   }
 }
@@ -591,7 +591,7 @@ const testVipExpireAndUpdateFrontend = async () => {
     const normalLevel = levels.reduce((min, level) => 
       level.id < min.id ? level : min, levels[0])
     
-    console.log('找到ID最小的会员等级:', normalLevel)
+          // console.log('找到ID最小的会员等级:', normalLevel)
     
     // 深拷贝用户对象
     const userCopy = JSON.parse(JSON.stringify(userStore.user))
@@ -624,7 +624,7 @@ const testVipExpireAndUpdateFrontend = async () => {
     ElMessage.success(`已将用户降级为普通会员(${normalLevel.name})，并设置VIP过期时间为昨天`)
     refreshDebugInfo()
   } catch (error) {
-    console.error('测试VIP过期失败:', error)
+    // console.error('测试VIP过期失败:', error)
     ElMessage.error('测试VIP过期失败')
   }
 }

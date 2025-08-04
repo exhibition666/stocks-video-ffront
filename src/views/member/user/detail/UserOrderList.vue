@@ -164,14 +164,22 @@
   <ContentWrap>
     <!-- 添加 row-key="id" 解决列数据中的 table#header 数据不刷新的问题  -->
     <el-table v-loading="loading" :data="list" row-key="id">
-      <OrderTableColumn :list="list" :pick-up-store-list="pickUpStoreList">
+      <el-table-column label="订单号" prop="no" width="260" />
+      <el-table-column label="订单状态" prop="status">
+        <template #default="{ row }">
+          <dict-tag :type="DICT_TYPE.TRADE_ORDER_STATUS" :value="row.status" />
+        </template>
+      </el-table-column>
+      <el-table-column label="支付金额" prop="payPrice" />
+      <el-table-column label="创建时间" prop="createTime" width="180" />
+      <el-table-column label="操作" width="100">
         <template #default="{ row }">
           <el-button link type="primary" @click="openDetail(row.id)">
             <Icon icon="ep:notification" />
             详情
           </el-button>
         </template>
-      </OrderTableColumn>
+      </el-table-column>
     </el-table>
     <!-- 分页 -->
     <Pagination
@@ -188,7 +196,6 @@ import { DICT_TYPE, getIntDictOptions, getStrDictOptions } from '@/utils/dict'
 import * as PickUpStoreApi from '@/api/mall/trade/delivery/pickUpStore'
 import * as DeliveryExpressApi from '@/api/mall/trade/delivery/express'
 import { FormInstance } from 'element-plus'
-import { OrderTableColumn } from '@/views/mall/trade/order/components'
 import { DeliveryTypeEnum } from '@/utils/constants'
 
 const { push } = useRouter() // 路由跳转

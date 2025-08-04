@@ -65,21 +65,27 @@ const handleUserInteraction = () => {
 
 <template>
   <ElDropdown class="custom-hover" :class="prefixCls" trigger="click" @click="handleUserInteraction">
-    <div class="user-avatar-wrapper" @click="handleUserInteraction">
-      <ElAvatar :src="avatar" alt="" class="user-avatar" />
+    <div class="user-name-wrapper" @click="handleUserInteraction">
       <span class="user-name">
         {{ userName }}
       </span>
+      <i class="el-icon-arrow-down dropdown-arrow"></i>
     </div>
     <template #dropdown>
       <ElDropdownMenu class="user-dropdown-menu">
-        <ElDropdownItem @click="toUserDetail" class="dropdown-item">
+        <ElDropdownItem @click="toUserDetail" class="dropdown-item profile-item">
           <Icon icon="ep:user" class="dropdown-icon" />
-          <div>个人中心</div>
+          <div class="item-content">
+            <div class="item-title">个人中心</div>
+            <div class="item-desc">查看和编辑个人信息</div>
+          </div>
         </ElDropdownItem>
-        <ElDropdownItem divided @click="loginOut" class="dropdown-item">
+        <ElDropdownItem divided @click="loginOut" class="dropdown-item logout-item">
           <Icon icon="ep:switch-button" class="dropdown-icon" />
-          <div>退出登录</div>
+          <div class="item-content">
+            <div class="item-title">退出登录</div>
+            <div class="item-desc">安全退出当前账户</div>
+          </div>
         </ElDropdownItem>
       </ElDropdownMenu>
     </template>
@@ -103,61 +109,149 @@ const handleUserInteraction = () => {
   border-radius: 16px;
 }
 
-.user-avatar-wrapper {
+.user-name-wrapper {
   display: flex;
   align-items: center;
   cursor: pointer;
-  padding: 2px;
-  border-radius: 22px;
-  transition: all 0.3s;
-  
+  padding: 8px 16px;
+  border-radius: 20px;
+  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+
   &:hover {
-    background-color: rgba(0, 0, 0, 0.05);
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   }
-  
-  .user-avatar {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    object-fit: cover;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  }
-  
+
   .user-name {
-    padding-left: 8px;
-    font-size: 14px;
-    color: #333;
-    max-width: 100px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #5f6368;
+    max-width: 120px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    
+    margin-right: 8px;
+
     @media (max-width: 991px) {
       display: none;
     }
   }
+
+  .dropdown-arrow {
+    font-size: 12px;
+    color: #5f6368;
+    transition: transform 0.3s ease;
+  }
+
+  &:hover .dropdown-arrow {
+    transform: rotate(180deg);
+  }
 }
 
 :deep(.user-dropdown-menu) {
-  min-width: 150px;
-  padding: 5px 0;
-  border-radius: 8px;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
-  
+  min-width: 240px;
+  padding: 8px 0;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+
   .dropdown-item {
     display: flex;
     align-items: center;
-    padding: 10px 15px;
-    
+    padding: 12px 16px;
+    margin: 2px 8px;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+
     .dropdown-icon {
-      margin-right: 8px;
-      font-size: 18px;
+      margin-right: 12px;
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    
-    &:hover {
-      background-color: #f5f7fa;
+
+    .item-content {
+      flex: 1;
+
+      .item-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #303133;
+        margin-bottom: 2px;
+      }
+
+      .item-desc {
+        font-size: 12px;
+        color: #909399;
+        line-height: 1.2;
+      }
+    }
+
+    &.profile-item {
+      .dropdown-icon {
+        color: #1a73e8;
+        background: rgba(26, 115, 232, 0.1);
+        border-radius: 6px;
+      }
+
+      &:hover {
+        background: linear-gradient(135deg, #f1f5ff 0%, #e8f0fe 100%);
+
+        .item-title {
+          color: #1a73e8;
+        }
+      }
+    }
+
+    &.vip-item {
+      .dropdown-icon {
+        color: #ff9800;
+        background: rgba(255, 152, 0, 0.1);
+        border-radius: 6px;
+
+        &.vip-icon {
+          animation: sparkle 2s ease-in-out infinite;
+        }
+      }
+
+      &:hover {
+        background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+
+        .item-title {
+          color: #ff9800;
+        }
+      }
+    }
+
+    &.logout-item {
+      .dropdown-icon {
+        color: #f56565;
+        background: rgba(245, 101, 101, 0.1);
+        border-radius: 6px;
+      }
+
+      &:hover {
+        background: linear-gradient(135deg, #fef5f5 0%, #fed7d7 100%);
+
+        .item-title {
+          color: #f56565;
+        }
+      }
     }
   }
+}
+
+@keyframes sparkle {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.1) rotate(5deg); }
 }
 
 .fade-bottom-enter-active,

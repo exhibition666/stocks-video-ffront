@@ -122,7 +122,7 @@ export const useUserStore = defineStore('admin-user', {
     async setMemberInfo() {
       if (!getAccessToken()) {
         // 没有token时，直接返回游客信息
-        console.log('未检测到 token，返回游客信息')
+        // console.log('未检测到 token，返回游客信息')
         this.user = null
         this.isSetUser = true
         return null
@@ -130,15 +130,15 @@ export const useUserStore = defineStore('admin-user', {
       
       try {
         // 获取会员信息
-        console.log('正在获取会员信息...')
-        console.log('当前 token:', getAccessToken())
+        // console.log('正在获取会员信息...')
+        // console.log('当前 token:', getAccessToken())
         
         // 确保请求头中包含 token
         const memberUser = await getCurrentUser()
-        console.log('获取到的会员信息:', JSON.stringify(memberUser))
+        // console.log('获取到的会员信息:', JSON.stringify(memberUser))
         
         if (!memberUser) {
-          console.error('获取会员信息失败: 返回数据为空')
+          // console.error('获取会员信息失败: 返回数据为空')
           this.user = null
           this.isSetUser = false
           return null
@@ -160,13 +160,13 @@ export const useUserStore = defineStore('admin-user', {
         }
         
         // 保存到缓存
-        console.log('保存会员信息到缓存:', JSON.stringify(userInfo))
+        // console.log('保存会员信息到缓存:', JSON.stringify(userInfo))
         wsCache.set(CACHE_KEY.USER, userInfo)
         
         return memberUser
       } catch (error) {
-        console.error('获取会员信息失败:', error)
-        console.error('错误详情:', JSON.stringify(error))
+        // console.error('获取会员信息失败:', error)
+        // console.error('错误详情:', JSON.stringify(error))
         this.user = null
         this.isSetUser = false
         return null
@@ -176,43 +176,43 @@ export const useUserStore = defineStore('admin-user', {
     async checkVipExpiration(user) {
       if (!user) return
       
-      console.log('检查VIP过期状态...')
-      console.log('完整的用户数据:', JSON.stringify(user))
+      // console.log('检查VIP过期状态...')
+      // console.log('完整的用户数据:', JSON.stringify(user))
       
       try {
         // 尝试从多个可能的字段名称获取VIP到期时间，优先使用vipExpireTime
         const vipExpireTime = user.vipExpireTime || user.vip_expire_time || user.expireTime
         
         if (vipExpireTime) {
-          console.log('找到VIP到期时间:', vipExpireTime)
+          // console.log('找到VIP到期时间:', vipExpireTime)
           const now = new Date()
           const expireDate = new Date(vipExpireTime)
           
-          console.log('当前时间:', now.toISOString())
-          console.log('VIP到期时间:', vipExpireTime, '解析为:', expireDate.toISOString())
+          // console.log('当前时间:', now.toISOString())
+          // console.log('VIP到期时间:', vipExpireTime, '解析为:', expireDate.toISOString())
           
           // 判断是否已过期
           if (now > expireDate) {
-            console.log('VIP已过期，准备降级为普通用户')
+            // console.log('VIP已过期，准备降级为普通用户')
             
             try {
               // 获取所有会员等级
               const allLevels = await getLevelList({})
-              console.log('获取到的会员等级列表:', allLevels)
+              // console.log('获取到的会员等级列表:', allLevels)
               
               if (allLevels && allLevels.length > 0) {
                 // 找出ID最小的等级作为普通用户等级
                 const normalLevel = allLevels.reduce((min, level) => 
                   level.id < min.id ? level : min, allLevels[0])
                 
-                console.log('找到ID最小的会员等级:', normalLevel)
+                // console.log('找到ID最小的会员等级:', normalLevel)
                 
                 // 当前用户等级ID
                 const currentLevelId = user.level?.id || user.level_id || user.levelId
                 
                 // 如果当前不是最低等级，则只在前端进行降级处理
                 if (currentLevelId !== normalLevel.id) {
-                  console.log('执行前端降级操作，从', currentLevelId, '降级到', normalLevel.id)
+                  // console.log('执行前端降级操作，从', currentLevelId, '降级到', normalLevel.id)
                   
                   // 不再调用后端API，只更新前端数据
                   // await updateUserLevel({
@@ -243,26 +243,26 @@ export const useUserStore = defineStore('admin-user', {
                   // 添加过期提醒
                   message.warning('您的VIP会员已过期，已恢复为普通会员')
                   
-                  console.log('前端用户数据已更新为普通会员')
+                  // console.log('前端用户数据已更新为普通会员')
                 } else {
-                  console.log('用户已经是最低等级会员，无需降级')
+                  // console.log('用户已经是最低等级会员，无需降级')
                 }
               } else {
-                console.error('获取会员等级列表失败或列表为空')
+                // console.error('获取会员等级列表失败或列表为空')
               }
             } catch (error) {
-              console.error('降级用户失败:', error)
-              console.error('错误详情:', JSON.stringify(error))
+              // console.error('降级用户失败:', error)
+              // console.error('错误详情:', JSON.stringify(error))
             }
           } else {
-            console.log('VIP未过期，到期时间:', expireDate.toISOString())
+            // console.log('VIP未过期，到期时间:', expireDate.toISOString())
           }
         } else {
-          console.log('用户无VIP到期时间记录，视为普通用户')
+          // console.log('用户无VIP到期时间记录，视为普通用户')
         }
       } catch (error) {
-        console.error('检查VIP过期出错:', error)
-        console.error('错误详情:', JSON.stringify(error))
+        // console.error('检查VIP过期出错:', error)
+        // console.error('错误详情:', JSON.stringify(error))
       }
       
       return user

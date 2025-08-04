@@ -3,224 +3,64 @@ import { useDesign } from '@/hooks/web/useDesign'
 import { useRouter } from 'vue-router'
 import { ref, onMounted, computed } from 'vue'
 import StocksHeader from '@/components/StocksHeader/index.vue'
-import { FrontVideoApi } from '@/api/stocks-front/video'
-import { FrontVideoTypeApi } from '@/api/stocks-front/videotype'
-import type { Video } from '@/api/system/video'
-import type { VideoType } from '@/api/system/videotype'
-import { getAccessUrl } from '@/api/infra/file'
-import { useSignedUrlPreview } from '@/utils/useSignedUrlPreview'
+import { Search, VideoPlay, DataAnalysis } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/modules/user'
-import { Search } from '@element-plus/icons-vue'
 import { getAccessToken } from '@/utils/auth'
 
 const { getPrefixCls } = useDesign()
 const prefixCls = getPrefixCls('home')
 const router = useRouter()
-
-// 从环境变量获取 configId
-const OSS_CONFIG_ID = import.meta.env.VITE_OSS_CONFIG_ID
-console.log('OSS_CONFIG_ID from env:', OSS_CONFIG_ID)
-
-// 测试图片路径（只用相对路径！）
-const testImagePath = '20250619/398b82aad7370a0e5d6fdab76e3af5a_1750312606407.png'
-const testImageUrl = ref('')
-const testImageLoading = ref(true)
-
-// 数据加载状态
-const loading = ref(false)
-// 错误信息
-const errorMsg = ref('')
-
-// 分类数据
-const categories = ref<VideoType[]>([])
-
-// 视频数据
-const videoList = ref<Video[]>([])
-
-// 存储每个视频的签名URL composable
-const videoPicSignedUrlMap = ref<Record<number, ReturnType<typeof useSignedUrlPreview>>>({})
-
-// 当前选中的分类ID，null 表示全部
-const currentCategoryId = ref<number | null>(null)
-
-// 搜索关键词
-const searchKeyword = ref('')
-
-// 判断用户是否已登录
-const isUserLoggedIn = computed(() => {
-  return !!getAccessToken()
-})
-
 const userStore = useUserStore()
 
-// 处理搜索
-const handleSearch = () => {
-  if (!searchKeyword.value.trim()) return
-  
-  console.log('搜索关键词:', searchKeyword.value)
-  // 可以添加实际的搜索逻辑，例如调用API进行搜索
-  errorMsg.value = `正在搜索"${searchKeyword.value}"相关的视频...`
-  
-  // 模拟搜索行为
-  loading.value = true
-  setTimeout(() => {
-    loading.value = false
-    // 这里可以调用实际的搜索API
-    // searchVideos(searchKeyword.value)
-  }, 1000)
+// 检查用户是否已登录
+const isLoggedIn = computed(() => {
+  return !!getAccessToken() || !!userStore.getToken
+})
+
+// 跳转到视频页面
+const goToVideoPage = () => {
+  router.push('/stocks-front/video')
 }
 
-// 获取签名URL的工具函数
-const fetchSignedUrl = async (path: string) => {
-  if (!path) return ''
-  try {
-    const configId = Number(OSS_CONFIG_ID)
-    if (isNaN(configId)) {
-      throw new Error('无效的configId: ' + OSS_CONFIG_ID)
-    }
-    console.log('获取签名URL - 请求详情:', { configId, path, timeout: 1800 })
-    const res = await getAccessUrl(configId, path)
-    console.log('获取签名URL - 原始响应:', res)
-    console.log('后端原始返回JSON:', JSON.stringify(res, null, 2))
-    // 兼容后端返回 { accessUrl: string }
-    const accessUrl = res.accessUrl
-    console.log('fetchSignedUrl accessUrl:', accessUrl)
-    if (!accessUrl) {
-      throw new Error('响应中没有找到有效的accessUrl')
-    }
-    return accessUrl
-  } catch (error) {
-    console.error('fetchSignedUrl 详细错误:', error, JSON.stringify(error));
-    errorMsg.value = `获取签名URL失败: ${error.message || '未知错误'}`;
-    return ''
+// 跳转到股票期权询价页面
+const goToInquiryPage = () => {
+  router.push('/stocks-front/inquiry')
+}
+
+// 跳转到登录页面
+const goToLogin = () => {
+  router.push('/stocks-front/login')
+}
+
+// 当前选中的内容索引
+const activeContentIndex = ref(0)
+
+// 内容数据
+const contentItems = [
+  {
+    title: '专业视频教程',
+    description: '从基础入门到高级策略，涵盖股票分析、期权交易、风险管理等全方位教学内容，助您系统掌握投资技能',
+    buttonText: '开始学习',
+    icon: 'el-icon-video-play',
+    action: goToVideoPage
+  },
+  {
+    title: '期权询价服务',
+    description: '实时期权定价工具，支持多种期权策略分析，提供专业的风险评估和收益预测，让您的投资决策更加精准',
+    buttonText: '立即询价',
+    icon: 'el-icon-money',
+    action: goToInquiryPage
   }
+
+]
+
+// 切换内容
+const changeContent = (index) => {
+  activeContentIndex.value = index
 }
 
-// 获取视频分类
-const getVideoCategories = async () => {
-  try {
-    const res = await FrontVideoTypeApi.getAllVideoTypes()
-    categories.value = res.list || []
-  } catch (error) {
-    if (error && error.toString().includes('401')) {
-      errorMsg.value = '未登录，部分分类仅登录后可见';
-    } else {
-      errorMsg.value = '获取视频分类失败: ' + (error.message || '未知错误')
-    }
-  }
-}
-
-// 获取视频列表
-const getVideoList = async (categoryId?: number) => {
-  loading.value = true
-  errorMsg.value = ''
-  try {
-    const params = {
-      pageNo: 1,
-      pageSize: 24 // 增加默认显示数量
-    }
-    if (categoryId) {
-      params['typeId'] = categoryId
-    }
-    const res = await FrontVideoApi.getVideoList(params)
-    videoList.value = res.list || []
-    videoPicSignedUrlMap.value = {}
-    for (const video of videoList.value) {
-      if (video.picUrl) {
-        const preview = useSignedUrlPreview()
-        videoPicSignedUrlMap.value[video.id] = preview
-        preview.fetchSignedUrl(video.picUrl)
-      }
-    }
-    if (res.list?.length === 0) {
-      errorMsg.value = '没有找到视频数据'
-    }
-  } catch (error) {
-    if (error && error.toString().includes('401')) {
-      errorMsg.value = '未登录，部分视频仅登录后可见';
-    } else {
-      errorMsg.value = '获取视频列表失败: ' + (error.message || '未知错误')
-    }
-  } finally {
-    loading.value = false
-  }
-}
-
-const goToVideoDetail = (videoId: number) => {
-  router.push(`/stocks-front/videodetail/${videoId}`)
-}
-
-const goToHome = () => {
-  router.push('/stocks-front/home')
-}
-
-const goToUserDetail = () => {
-  router.push('/stocks-front/userDetail')
-}
-
-const goToVipUpgrade = () => {
-  router.push('/stocks-front/vip_upgrade')
-}
-
-// 处理"全部"分类点击
-const handleAllCategory = () => {
-  currentCategoryId.value = null
-  getVideoList()
-}
-
-const handleCategoryClick = (category: VideoType) => {
-  currentCategoryId.value = category.id
-  getVideoList(category.id)
-}
-
-// 获取默认图片
-const getDefaultImage = (url?: string) => {
-  return url || '/src/assets/imgs/mountain.jpg'
-}
-
-// 格式化观看次数
-const formatViews = (count: number = 0) => {
-  if (count >= 1000000) {
-    return (count / 1000000).toFixed(1) + 'M 次观看'
-  } else if (count >= 1000) {
-    return (count / 1000).toFixed(1) + 'K 次观看'
-  }
-  return count + ' 次观看'
-}
-
-// 格式化发布时间 (随机生成，仅用于演示)
-const formatDate = () => {
-  const days = Math.floor(Math.random() * 365)
-  if (days === 0) {
-    return '今天'
-  } else if (days === 1) {
-    return '昨天'
-  } else if (days < 7) {
-    return days + ' 天前'
-  } else if (days < 30) {
-    return Math.floor(days / 7) + ' 周前'
-  } else if (days < 365) {
-    return Math.floor(days / 30) + ' 个月前'
-  } else {
-    return Math.floor(days / 365) + ' 年前'
-  }
-}
-
-// 随机生成观看次数（用于演示）
-const getRandomViews = () => {
-  return Math.floor(Math.random() * 1000000)
-}
-
-// 移动端侧边栏状态
-const sidebarVisible = ref(false)
-const toggleSidebar = () => {
-  sidebarVisible.value = !sidebarVisible.value
-}
-
-onMounted(async () => {
-  console.log('首页组件已加载')
-  getVideoCategories()
-  getVideoList() // 默认加载全部视频
+onMounted(() => {
+  // console.log('首页组件已加载')
 })
 </script>
 
@@ -228,585 +68,731 @@ onMounted(async () => {
   <div :class="prefixCls">
     <StocksHeader />
     
-    <!-- 移动端导航切换按钮 -->
-    <div class="mobile-menu-toggle" @click="toggleSidebar">
-      <i class="el-icon-menu"></i>
+    <div class="hero-section">
+      <div class="hero-content">
+        <h1 class="hero-title">股票投资教育平台<br/>您的财富增长伙伴</h1>
+        <p class="hero-subtitle">专业的股票期权教学 • 智能投资策略 • 风险管理培训</p>
+        
+        <div class="hero-actions">
+          <el-button type="primary" size="large" @click="goToVideoPage" class="hero-button">
+            <i class="el-icon-video-play"></i>
+            浏览视频
+          </el-button>
+          <el-button type="default" size="large" @click="goToInquiryPage" class="hero-button">
+            <i class="el-icon-money"></i>
+            期权询价
+          </el-button>
+        </div>
+      </div>
     </div>
     
-    <div class="app-layout">
-      <!-- 侧边栏 -->
-      <aside class="sidebar" :class="{ 'active': sidebarVisible }">
-        <div class="sidebar-section">
-          <div class="sidebar-item" :class="{ active: $route.path.includes('/stocks-front/home') }" @click="goToHome">
-            <i class="el-icon-house"></i>
-            <span>首页</span>
-          </div>
-          <div class="sidebar-item">
-            <i class="el-icon-video-play"></i>
-            <span>短片</span>
-          </div>
-          <div class="sidebar-item">
-            <i class="el-icon-collection-tag"></i>
-            <span>订阅内容</span>
-          </div>
+    <div class="content-section">
+      <div class="content-nav">
+        <div 
+          v-for="(item, index) in contentItems" 
+          :key="index"
+          class="nav-item"
+          :class="{ active: activeContentIndex === index }"
+          @click="changeContent(index)"
+        >
+          <i :class="item.icon"></i>
+          <span>{{ item.title }}</span>
         </div>
-        
-        <div class="sidebar-divider"></div>
-        
-        <div class="sidebar-section">
-          <div class="sidebar-item">
-            <i class="el-icon-collection"></i>
-            <span>媒体库</span>
-          </div>
-          <div class="sidebar-item">
-            <i class="el-icon-time"></i>
-            <span>历史记录</span>
-          </div>
-          <div class="sidebar-item">
-            <i class="el-icon-video-camera"></i>
-            <span>我的视频</span>
-          </div>
-          <div class="sidebar-item">
-            <i class="el-icon-clock"></i>
-            <span>稍后观看</span>
-          </div>
-          <div class="sidebar-item">
-            <i class="el-icon-star-on"></i>
-            <span>收藏</span>
-          </div>
-        </div>
-        
-        <div class="sidebar-divider"></div>
-        
-        <div class="sidebar-section">
-          <div class="sidebar-header">探索</div>
-          <div 
-            v-for="category in categories"
-            :key="category.id"
-            class="sidebar-item"
-            :class="{ active: currentCategoryId === category.id }"
-            @click="handleCategoryClick(category)"
-          >
-            <i class="el-icon-folder"></i>
-            <span>{{ category.name }}</span>
-          </div>
-        </div>
-
-        <div class="sidebar-divider"></div>
-
-        <div class="sidebar-section" v-if="isUserLoggedIn">
-          <div class="sidebar-header">我的账户</div>
-          <div class="sidebar-item" @click="goToUserDetail">
-            <i class="el-icon-user"></i>
-            <span>个人资料</span>
-          </div>
-          <div class="sidebar-item" @click="goToVipUpgrade">
-            <i class="el-icon-trophy"></i>
-            <span>购买VIP</span>
-          </div>
-        </div>
-      </aside>
+      </div>
       
-      <!-- 遮罩层（移动端） -->
-      <div class="sidebar-overlay" v-if="sidebarVisible" @click="toggleSidebar"></div>
+      <div class="content-display">
+        <div class="content-card">
+          <h2>{{ contentItems[activeContentIndex].title }}</h2>
+          <p>{{ contentItems[activeContentIndex].description }}</p>
+          <el-button 
+            type="primary" 
+            @click="contentItems[activeContentIndex].action"
+          >
+            {{ contentItems[activeContentIndex].buttonText }}
+          </el-button>
+        </div>
+        
+        <div class="content-quote">
+          <blockquote>
+            "投资最重要的不是知道，而是做什么。不是我们看到了什么，而是我们做了什么。"
+            <footer>— 沃伦·巴菲特</footer>
+          </blockquote>
+        </div>
+      </div>
+    </div>
+    
+    <div class="features-section">
+      <h2 class="section-title">我们的服务</h2>
       
-      <!-- 主内容区 -->
-      <main class="main-content">
-        <!-- 顶部横幅 -->
-        <div class="content-header">
-          <h1 class="page-title">精选视频</h1>
-          <p class="page-description">发现最新、最热门的视频内容</p>
-        </div>
-        
-        <!-- 分类筛选器 -->
-        <div class="category-chips">
-          <div 
-            class="category-chip" 
-            :class="{ active: currentCategoryId === null }"
-            @click="handleAllCategory"
-          >
-            全部
-          </div>
-          <div 
-            v-for="category in categories.slice(0, 10)"
-            :key="category.id"
-            class="category-chip"
-            :class="{ active: currentCategoryId === category.id }"
-            @click="handleCategoryClick(category)"
-          >
-            {{ category.name }}
-          </div>
-        </div>
-        
-        <!-- 加载提示 -->
-        <div v-if="loading" class="loading-container">
-          <div v-for="i in 8" :key="i" class="loading-skeleton">
-            <div class="skeleton-thumbnail"></div>
-            <div class="skeleton-details">
-              <div class="skeleton-title"></div>
-              <div class="skeleton-meta"></div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- 错误提示 -->
-        <el-alert
-          v-if="errorMsg"
-          :title="errorMsg"
-          type="warning"
-          show-icon
-          :closable="false"
-          class="mb-4"
-        />
-        
-        <!-- 视频网格 -->
-        <el-empty v-if="!loading && videoList.length === 0" description="暂无视频" />
-        <div v-else-if="!loading" class="video-grid">
-          <div
-            v-for="video in videoList"
-            :key="video.id"
-            class="video-card"
-            @click="goToVideoDetail(video.id)"
-          >
-            <div class="thumbnail">
-              <img :src="videoPicSignedUrlMap[video.id]?.signedUrl || getDefaultImage()" :alt="video.title" />
-              <span class="duration">{{ Math.floor(video.duration || 0) }}秒</span>
-            </div>
-            <div class="video-info">
-              <div class="avatar">
-                <div class="avatar-circle"></div>
-              </div>
-              <div class="details">
-                <h3 class="title" :title="video.title">{{ video.title }}</h3>
-                <div class="channel-name">{{ video.author || '匿名用户' }}</div>
-                <div class="meta">
-                  <span class="views">{{ formatViews(getRandomViews()) }}</span>
-                  <span class="dot">•</span>
-                  <span class="publish-date">{{ formatDate() }}</span>
+      <div class="feature-cards">
+        <el-row :gutter="20">
+          <el-col :xs="24" :sm="12" :md="8">
+            <el-card shadow="hover" class="feature-card" @click="router.push('/stocks-front/inquiry')">
+              <div class="card-content">
+                <div class="card-icon">
+                  <el-icon><Search /></el-icon>
+                </div>
+                <div class="card-info">
+                  <h3>期权询价</h3>
+                  <p>实时期权定价与风险分析，支持看涨看跌等多种策略</p>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- 分页或加载更多按钮 -->
-        <div class="load-more-container" v-if="!loading && videoList.length > 0">
-          <el-button type="primary" round class="load-more-btn">加载更多</el-button>
-        </div>
-      </main>
+            </el-card>
+          </el-col>
+          
+          <el-col :xs="24" :sm="12" :md="8">
+            <el-card shadow="hover" class="feature-card" @click="router.push('/stocks-front/video')">
+              <div class="card-content">
+                <div class="card-icon">
+                  <el-icon><VideoPlay /></el-icon>
+                </div>
+                <div class="card-info">
+                  <h3>视频教学</h3>
+                  <p>专业讲师授课，从入门到精通的系统化学习路径</p>
+                </div>
+              </div>
+            </el-card>
+          </el-col>
+          
+
+        </el-row>
+      </div>
     </div>
+    
+    <!-- 行动号召区域 - 仅在未登录时显示 -->
+    <div v-if="!isLoggedIn" class="cta-section">
+      <div class="cta-content">
+        <h2>开启智慧投资之路</h2>
+        <p>加入我们的学习社区，掌握专业投资技能，实现财富稳健增长</p>
+        <el-button type="primary" size="large" @click="goToLogin">立即开始学习</el-button>
+      </div>
+    </div>
+    
+    <footer class="site-footer">
+      <div class="footer-content">
+        <div class="copyright">© 2025 NineTube 股票教育平台 版权所有 | 专业投资教育 · 智慧理财之选</div>
+      </div>
+    </footer>
   </div>
 </template>
 
 <style lang="scss" scoped>
 $prefix-cls: #{$namespace}-home;
-$primary-color: #065fd4;
-$text-color: #0f0f0f;
-$text-secondary: #606060;
-$bg-color: #ffffff;
-$bg-secondary: #f9f9f9;
-$border-color: #e5e5e5;
-$hover-color: #f2f2f2;
-$sidebar-width: 240px;
-$header-height: 60px;
+// 股票主题色彩方案
+$primary-color: #1a73e8;      // 蓝色主色调
+$secondary-color: #34a853;    // 绿色（涨）
+$danger-color: #ea4335;       // 红色（跌）
+$warning-color: #fbbc04;      // 黄色（警告）
+$text-color: #202124;         // 深灰色文字
+$text-light: #5f6368;         // 浅灰色文字
+$bg-color: #ffffff;           // 白色背景
+$bg-dark: #f8f9fa;            // 浅灰背景
+$bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+$header-height: 70px;
 
 .#{$prefix-cls} {
   width: 100%;
   min-height: 100vh;
   background: $bg-color;
   color: $text-color;
+  overflow-x: hidden;
   
-  .app-layout {
+  // 英雄区域
+  .hero-section {
+    height: 100vh;
     display: flex;
-    padding-top: $header-height;
-    min-height: calc(100vh - $header-height);
-  }
-  
-  // 侧边栏样式
-  .sidebar {
-    width: $sidebar-width;
-    height: calc(100vh - $header-height);
-    position: fixed;
-    left: 0;
-    top: $header-height;
-    background: $bg-color;
-    overflow-y: auto;
-    padding: 12px 0;
-    z-index: 100;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-    
-    &-section {
-      margin-bottom: 12px;
-    }
-    
-    &-header {
-      padding: 8px 24px;
-      font-size: 16px;
-      font-weight: 500;
-      color: $text-color;
-    }
-    
-    &-item {
-      display: flex;
-      align-items: center;
-      padding: 10px 24px;
-      cursor: pointer;
-      border-radius: 0 20px 20px 0;
-      margin-right: 12px;
-      
-      i {
-        margin-right: 24px;
-        font-size: 20px;
-      }
-      
-      span {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      
-      &:hover {
-        background: $hover-color;
-      }
-      
-      &.active {
-        background: rgba($primary-color, 0.1);
-        font-weight: 500;
-        color: $primary-color;
-      }
-    }
-    
-    &-divider {
-      height: 1px;
-      background: $border-color;
-      margin: 12px 0;
-    }
-  }
-  
-  // 侧边栏遮罩
-  .sidebar-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 99;
-    display: none;
-  }
-  
-  // 移动端菜单按钮
-  .mobile-menu-toggle {
-    position: fixed;
-    top: 70px;
-    left: 10px;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: $primary-color;
-    color: white;
-    display: none;
     align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    z-index: 99;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    transition: all 0.3s ease;
-    
-    &:hover {
-      background: darken($primary-color, 10%);
-    }
-    
-    i {
-      font-size: 20px;
-    }
-  }
-  
-  // 主内容区样式
-  .main-content {
-    flex: 1;
-    margin-left: $sidebar-width;
-    padding: 24px 40px;
-    background-color: #f5f7fa;
-  }
-  
-  // 内容头部
-  .content-header {
-    margin-bottom: 24px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid rgba($border-color, 0.5);
-    
-    .page-title {
-      font-size: 28px;
-      font-weight: 600;
-      margin: 0 0 8px;
-      color: $text-color;
-    }
-    
-    .page-description {
-      font-size: 16px;
-      color: $text-secondary;
-      margin: 0;
-    }
-  }
-  
-  // 分类筛选器
-  .category-chips {
-    display: flex;
-    overflow-x: auto;
-    gap: 12px;
-    margin-bottom: 24px;
-    padding-bottom: 16px;
-    scrollbar-width: none; // Firefox
-    &::-webkit-scrollbar {
-      display: none; // Chrome, Safari, Edge
-    }
-    
-    .category-chip {
-      background: $bg-secondary;
-      color: $text-color;
-      padding: 8px 16px;
-      border-radius: 20px;
-      font-size: 14px;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: all 0.2s ease;
-      border: 1px solid transparent;
-      
-      &:hover {
-        border-color: rgba($primary-color, 0.3);
-        background: darken($bg-secondary, 3%);
-      }
-      
-      &.active {
-        background: $primary-color;
-        color: $bg-color;
-      }
-    }
-  }
-  
-  // 加载骨架屏
-  .loading-container {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 20px;
-    
-    .loading-skeleton {
-      display: flex;
-      flex-direction: column;
-      
-      .skeleton-thumbnail {
-        width: 100%;
-        height: 180px;
-        background: linear-gradient(90deg, #f0f0f0 25%, #f8f8f8 50%, #f0f0f0 75%);
-        background-size: 200% 100%;
-        animation: shimmer 1.5s infinite;
-        border-radius: 12px;
-        margin-bottom: 12px;
-      }
-      
-      .skeleton-details {
-        display: flex;
-        flex-direction: column;
-        
-        .skeleton-title {
-          height: 20px;
-          background: linear-gradient(90deg, #f0f0f0 25%, #f8f8f8 50%, #f0f0f0 75%);
-          background-size: 200% 100%;
-          animation: shimmer 1.5s infinite;
-          border-radius: 4px;
-          margin-bottom: 12px;
-          width: 90%;
-        }
-        
-        .skeleton-meta {
-          height: 16px;
-          background: linear-gradient(90deg, #f0f0f0 25%, #f8f8f8 50%, #f0f0f0 75%);
-          background-size: 200% 100%;
-          animation: shimmer 1.5s infinite;
-          border-radius: 4px;
-          width: 60%;
-        }
-      }
-    }
-  }
-  
-  @keyframes shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-  }
-  
-  // 视频网格
-  .video-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 24px;
-  }
-  
-  // 视频卡片
-  .video-card {
-    cursor: pointer;
-    background: $bg-color;
-    border-radius: 12px;
+    padding: 0 5%;
+    background: linear-gradient(rgba(26, 115, 232, 0.85), rgba(26, 115, 232, 0.75)),
+                url('/ChatGPT Image 2025年7月21日 20_57_55.png') no-repeat center center;
+    background-size: cover;
+    background-attachment: fixed;
+    padding-top: $header-height;
+    position: relative;
     overflow: hidden;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    
-    &:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-      
-      .thumbnail img {
-        transform: scale(1.05);
-      }
+    width: 100%;
+    max-width: 100vw;
+
+    // 添加动态粒子效果
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: radial-gradient(circle at 20% 80%, rgba(52, 168, 83, 0.1) 0%, transparent 50%),
+                  radial-gradient(circle at 80% 20%, rgba(251, 188, 4, 0.1) 0%, transparent 50%),
+                  radial-gradient(circle at 40% 40%, rgba(234, 67, 53, 0.1) 0%, transparent 50%);
+      animation: float 6s ease-in-out infinite;
     }
-    
-    .thumbnail {
+
+    .hero-content {
+      max-width: 800px;
       position: relative;
-      width: 100%;
-      overflow: hidden;
-      
-      &::before {
-        content: "";
-        display: block;
-        padding-top: 56.25%; // 16:9 比例
-      }
-      
-      img {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        transition: transform 0.3s ease;
-      }
-      
-      .duration {
-        position: absolute;
-        bottom: 8px;
-        right: 8px;
-        background: rgba(0, 0, 0, 0.8);
+      z-index: 2;
+      color: white;
+
+      .hero-title {
+        font-size: 72px;
+        font-weight: 800;
+        line-height: 1.1;
+        margin-bottom: 32px;
         color: white;
-        padding: 3px 6px;
-        border-radius: 4px;
-        font-size: 12px;
-        font-weight: 500;
+        text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        background: linear-gradient(135deg, #ffffff 0%, #e3f2fd 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
       }
-    }
-    
-    .video-info {
-      display: flex;
-      padding: 12px;
-      
-      .avatar {
-        margin-right: 12px;
-        
-        .avatar-circle {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          background: #eee;
-          overflow: hidden;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
+
+      .hero-subtitle {
+        font-size: 28px;
+        color: rgba(255, 255, 255, 0.9);
+        margin-bottom: 48px;
+        line-height: 1.4;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        font-weight: 300;
       }
-      
-      .details {
-        flex: 1;
-        
-        .title {
-          font-size: 16px;
-          font-weight: 500;
-          line-height: 1.4;
-          margin: 0 0 6px;
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-          color: $text-color;
-        }
-        
-        .channel-name {
-          font-size: 14px;
-          color: $text-secondary;
-          margin-bottom: 4px;
-        }
-        
-        .meta {
-          font-size: 14px;
-          color: $text-secondary;
-          display: flex;
-          align-items: center;
-          
-          .dot {
-            margin: 0 4px;
+
+      .hero-actions {
+        display: flex;
+        gap: 20px;
+
+        .hero-button {
+          padding: 16px 40px;
+          font-weight: 600;
+          font-size: 18px;
+          border-radius: 50px;
+          transition: all 0.3s ease;
+          box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+
+          &:first-child {
+            background: $secondary-color;
+            border-color: $secondary-color;
+            color: white;
+
+            &:hover {
+              background: darken($secondary-color, 10%);
+              transform: translateY(-3px);
+              box-shadow: 0 12px 35px rgba(52, 168, 83, 0.4);
+            }
+          }
+
+          &:last-child {
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            backdrop-filter: blur(10px);
+
+            &:hover {
+              background: rgba(255, 255, 255, 0.25);
+              border-color: rgba(255, 255, 255, 0.5);
+              transform: translateY(-3px);
+              box-shadow: 0 12px 35px rgba(255, 255, 255, 0.2);
+            }
+          }
+
+          i {
+            margin-right: 10px;
+            font-size: 20px;
           }
         }
       }
     }
   }
   
-  // 加载更多
-  .load-more-container {
+  // 内容区域
+  .content-section {
+    padding: 100px 5%;
     display: flex;
-    justify-content: center;
-    margin-top: 40px;
-    padding-bottom: 40px;
-    
-    .load-more-btn {
-      padding: 12px 32px;
-      font-weight: 500;
-      font-size: 16px;
-      background-color: $primary-color;
-      border-color: $primary-color;
-      
-      &:hover {
-        background-color: darken($primary-color, 5%);
+    flex-direction: column;
+    background: linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%);
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+
+    .content-nav {
+      display: flex;
+      border-bottom: 3px solid #e8eaed;
+      margin-bottom: 60px;
+      background: white;
+      border-radius: 12px 12px 0 0;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      overflow: hidden;
+
+      .nav-item {
+        padding: 20px 32px;
+        cursor: pointer;
+        font-weight: 600;
+        color: $text-light;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        position: relative;
+        background: white;
+
+        i {
+          font-size: 22px;
+          transition: transform 0.3s ease;
+        }
+
+        &:hover {
+          color: $primary-color;
+          background: #f1f5ff;
+
+          i {
+            transform: scale(1.1);
+          }
+        }
+
+        &.active {
+          color: white;
+          background: $primary-color;
+          box-shadow: 0 4px 15px rgba(26, 115, 232, 0.3);
+
+          &::after {
+            content: '';
+            position: absolute;
+            bottom: -3px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: $secondary-color;
+          }
+        }
+      }
+    }
+
+    .content-display {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 60px;
+
+      .content-card {
+        background: white;
+        padding: 50px;
+        border-radius: 20px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+        border: 1px solid #e8eaed;
+        transition: all 0.3s ease;
+
+        &:hover {
+          transform: translateY(-5px);
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+        }
+
+        h2 {
+          font-size: 36px;
+          margin-bottom: 20px;
+          color: $primary-color;
+          font-weight: 700;
+        }
+
+        p {
+          font-size: 20px;
+          line-height: 1.7;
+          margin-bottom: 32px;
+          color: $text-light;
+        }
+
+        .el-button {
+          padding: 14px 32px;
+          font-size: 16px;
+          font-weight: 600;
+          border-radius: 25px;
+          background: $bg-gradient;
+          border: none;
+          color: white;
+          transition: all 0.3s ease;
+
+          &:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(26, 115, 232, 0.3);
+          }
+        }
+      }
+
+      .content-quote {
+        display: flex;
+        align-items: center;
+        background: linear-gradient(135deg, #f1f5ff 0%, #e8f0fe 100%);
+        padding: 50px;
+        border-radius: 20px;
+        border-left: 6px solid $primary-color;
+
+        blockquote {
+          font-size: 26px;
+          line-height: 1.6;
+          font-style: italic;
+          color: $primary-color;
+          margin: 0;
+          padding: 0;
+          position: relative;
+          font-weight: 500;
+
+          &::before {
+            content: '"';
+            font-size: 100px;
+            position: absolute;
+            top: -50px;
+            left: -30px;
+            color: rgba($primary-color, 0.15);
+            font-family: Georgia, serif;
+          }
+
+          footer {
+            margin-top: 24px;
+            font-size: 20px;
+            color: $text-light;
+            font-style: normal;
+            font-weight: 600;
+          }
+        }
       }
     }
   }
   
+  // 特性区域
+  .features-section {
+    padding: 120px 5%;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e8f0fe 100%);
+    position: relative;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: $bg-gradient;
+    }
+
+    .section-title {
+      text-align: center;
+      font-size: 48px;
+      margin-bottom: 80px;
+      color: $primary-color;
+      font-weight: 800;
+      position: relative;
+
+      &::after {
+        content: '';
+        position: absolute;
+        bottom: -20px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 80px;
+        height: 4px;
+        background: $bg-gradient;
+        border-radius: 2px;
+      }
+    }
+
+    .feature-cards {
+      margin-top: 40px;
+
+      .feature-card {
+        height: 100%;
+        cursor: pointer;
+        transition: all 0.4s ease;
+        border-radius: 20px;
+        overflow: hidden;
+        background: white;
+        border: 1px solid #e8eaed;
+
+        &:hover {
+          transform: translateY(-10px) scale(1.02);
+          box-shadow: 0 25px 60px rgba(0, 0, 0, 0.15);
+          border-color: $primary-color;
+        }
+
+        .card-content {
+          display: flex;
+          align-items: center;
+          padding: 30px;
+
+          .card-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 20px;
+            background: $bg-gradient;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 25px;
+            box-shadow: 0 8px 25px rgba(26, 115, 232, 0.2);
+
+            .el-icon {
+              font-size: 32px;
+              color: white;
+            }
+          }
+
+          .card-info {
+            flex: 1;
+
+            h3 {
+              margin: 0 0 12px 0;
+              font-size: 22px;
+              font-weight: 700;
+              color: $text-color;
+            }
+
+            p {
+              margin: 0;
+              color: $text-light;
+              font-size: 16px;
+              line-height: 1.5;
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  // 行动号召区域
+  .cta-section {
+    padding: 120px 5%;
+    background: $bg-gradient;
+    color: white;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+      animation: rotate 20s linear infinite;
+    }
+
+    .cta-content {
+      max-width: 700px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 2;
+
+      h2 {
+        font-size: 48px;
+        margin-bottom: 24px;
+        font-weight: 800;
+        text-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+      }
+
+      p {
+        font-size: 22px;
+        margin-bottom: 40px;
+        opacity: 0.95;
+        line-height: 1.6;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+
+      .el-button {
+        padding: 18px 50px;
+        font-size: 20px;
+        font-weight: 700;
+        background: white;
+        color: $primary-color;
+        border: none;
+        border-radius: 50px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        transition: all 0.3s ease;
+
+        &:hover {
+          background: rgba(255, 255, 255, 0.95);
+          transform: translateY(-3px);
+          box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+        }
+      }
+    }
+  }
+
+  // 页脚
+  .site-footer {
+    padding: 60px 5%;
+    background: linear-gradient(135deg, #202124 0%, #3c4043 100%);
+    color: white;
+
+    .footer-content {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+
+      .copyright {
+        color: rgba(255, 255, 255, 0.8);
+        font-size: 16px;
+        text-align: center;
+      }
+    }
+  }
+  
+  // 动画效果
+  @keyframes float {
+    0%, 100% { transform: translateY(0px) rotate(0deg); }
+    33% { transform: translateY(-10px) rotate(1deg); }
+    66% { transform: translateY(5px) rotate(-1deg); }
+  }
+
+  @keyframes rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   // 响应式设计
   @media (max-width: 1200px) {
-    .main-content {
-      padding: 24px;
+    .hero-section .hero-content .hero-title {
+      font-size: 60px;
+    }
+
+    .content-section .content-display {
+      gap: 40px;
     }
   }
-  
+
+  @media (max-width: 992px) {
+    .hero-section .hero-content .hero-title {
+      font-size: 52px;
+    }
+
+    .content-section .content-display {
+      grid-template-columns: 1fr;
+      gap: 40px;
+    }
+
+    .features-section .section-title {
+      font-size: 40px;
+    }
+  }
+
   @media (max-width: 768px) {
-    .mobile-menu-toggle {
-      display: flex;
-    }
-    
-    .sidebar {
-      transform: translateX(-100%);
-      transition: transform 0.3s ease;
-      box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
-      
-      &.active {
-        transform: translateX(0);
+    .hero-section {
+      padding: 0 3%;
+
+      .hero-content {
+        .hero-title {
+          font-size: 42px;
+        }
+
+        .hero-subtitle {
+          font-size: 22px;
+        }
+
+        .hero-actions {
+          flex-direction: column;
+          align-items: center;
+
+          .hero-button {
+            width: 100%;
+            max-width: 300px;
+          }
+        }
       }
     }
-    
-    .sidebar-overlay {
-      display: block;
-    }
-    
-    .main-content {
-      margin-left: 0;
-      padding: 16px;
-    }
-    
-    .content-header {
-      .page-title {
-        font-size: 24px;
+
+    .content-section {
+      padding: 80px 3%;
+
+      .content-nav {
+        overflow-x: auto;
+        white-space: nowrap;
+        padding-bottom: 10px;
+        border-radius: 12px;
+
+        &::-webkit-scrollbar {
+          height: 4px;
+        }
+
+        &::-webkit-scrollbar-thumb {
+          background: $primary-color;
+          border-radius: 4px;
+        }
+
+        .nav-item {
+          flex-shrink: 0;
+        }
+      }
+
+      .content-display {
+        .content-card, .content-quote {
+          padding: 30px;
+        }
       }
     }
-    
-    .video-grid {
-      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-      gap: 16px;
+
+    .features-section {
+      padding: 80px 3%;
+
+      .section-title {
+        font-size: 36px;
+      }
+
+      .feature-cards .feature-card .card-content {
+        padding: 20px;
+
+        .card-icon {
+          width: 60px;
+          height: 60px;
+          margin-right: 15px;
+
+          .el-icon {
+            font-size: 24px;
+          }
+        }
+
+        .card-info h3 {
+          font-size: 18px;
+        }
+      }
+    }
+
+    .cta-section {
+      padding: 80px 3%;
+
+      .cta-content {
+        h2 {
+          font-size: 36px;
+        }
+
+        p {
+          font-size: 18px;
+        }
+      }
+    }
+  }
+
+  @media (max-width: 480px) {
+    .hero-section .hero-content {
+      .hero-title {
+        font-size: 32px;
+      }
+
+      .hero-subtitle {
+        font-size: 18px;
+      }
+    }
+
+    .content-section .content-display {
+      .content-card, .content-quote {
+        padding: 20px;
+      }
     }
   }
 }

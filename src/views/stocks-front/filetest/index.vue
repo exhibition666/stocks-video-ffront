@@ -451,7 +451,7 @@ const configDetailDisplay = computed(() => {
       displayData.parsedConfig = JSON.parse(config)
     }
   } catch (e) {
-    console.error('解析配置失败:', e)
+    // console.error('解析配置失败:', e)
   }
   return JSON.stringify(displayData, null, 2)
 })
@@ -616,7 +616,7 @@ const handleLogin = async () => {
     authToken.value = result.data.accessToken
     ElMessage.success('登录成功')
   } catch (error) {
-    console.error('登录失败:', error)
+    // console.error('登录失败:', error)
     ElMessage.error(`登录失败: ${error.message || '未知错误'}`)
   } finally {
     loading.value.login = false
@@ -652,7 +652,7 @@ const getConfigDetail = async () => {
     configDetail.value = result.data
     ElMessage.success('获取配置详情成功')
   } catch (error) {
-    console.error('获取配置详情失败:', error)
+    // console.error('获取配置详情失败:', error)
     ElMessage.error(`获取配置详情失败: ${error.message || '未知错误'}`)
   } finally {
     loading.value.configDetail = false
@@ -707,7 +707,7 @@ const getSTSToken = async () => {
       }
     }
     
-    console.log('请求STS令牌URL:', url)
+    // console.log('请求STS令牌URL:', url)
     debugInfo.value.requestUrl = url
     
     // 设置请求选项
@@ -783,7 +783,7 @@ const getSTSToken = async () => {
     }
     
     // 检查是否获取到必要的令牌信息
-    console.log('最终赋值给stsToken.value的数据', stsData)
+    // console.log('最终赋值给stsToken.value的数据', stsData)
     if (stsData.accessKeyId) {
     stsToken.value = stsData
     } else if (stsData.stsToken && stsData.stsToken.accessKeyId) {
@@ -802,7 +802,7 @@ const getSTSToken = async () => {
     // 自动获取文件列表
     handleListFiles()
   } catch (error) {
-    console.error('获取STS令牌失败:', error)
+    // console.error('获取STS令牌失败:', error)
     ElMessage.error(`获取STS令牌失败: ${error.message || '未知错误'}`)
     errorMessage.value = error.message || '未知错误'
   } finally {
@@ -845,9 +845,9 @@ const initOssClient = async () => {
       secure: true // 使用HTTPS
     })
     
-    console.log('OSS客户端初始化成功')
+    // console.log('OSS客户端初始化成功')
   } catch (error) {
-    console.error('OSS客户端初始化失败:', error)
+    // console.error('OSS客户端初始化失败:', error)
     ElMessage.error('OSS客户端初始化失败，请确保已安装ali-oss库')
   }
 }
@@ -892,7 +892,7 @@ const uploadFile = async (options) => {
       }
     })
     
-    console.log('文件上传成功:', result)
+    // console.log('文件上传成功:', result)
     
     // 构建访问URL
     let fileUrl = ''
@@ -918,7 +918,7 @@ const uploadFile = async (options) => {
     
     ElMessage.success('文件上传成功')
   } catch (error) {
-    console.error('文件上传失败:', error)
+    // console.error('文件上传失败:', error)
     
     // 解析和处理阿里云OSS错误
     ossUploadErrorInfo.value = {
@@ -949,12 +949,12 @@ const uploadFile = async (options) => {
 
 // 上传成功回调
 const handleUploadSuccess = (res) => {
-  console.log('上传成功回调:', res)
+      // console.log('上传成功回调:', res)
 }
 
 // 上传错误回调
 const handleUploadError = (err) => {
-  console.error('上传错误回调:', err)
+      // console.error('上传错误回调:', err)
 }
 
 // 复制URL到剪贴板
@@ -962,7 +962,7 @@ const copyUrl = (url) => {
   navigator.clipboard.writeText(url).then(() => {
     ElMessage.success('URL已复制到剪贴板')
   }).catch(err => {
-    console.error('复制失败:', err)
+    // console.error('复制失败:', err)
     ElMessage.error('复制失败')
   })
 }
@@ -1011,7 +1011,7 @@ const handleListFiles = async () => {
       raw: item
     }))
   } catch (e) {
-    console.error('获取文件列表失败', e)
+    // console.error('获取文件列表失败', e)
     ElMessage.error(e.message || '获取文件列表失败')
   } finally {
     loadingList.value = false
@@ -1073,7 +1073,7 @@ const loadTreeNode = async (node, resolve) => {
     })
     resolve(children)
   } catch (e) {
-    console.error('加载目录失败', e)
+    // console.error('加载目录失败', e)
     resolve([])
   }
 }
@@ -1158,7 +1158,7 @@ const isDirectory = (item) => {
 }
 
 onMounted(() => {
-  console.log('文件测试组件已加载')
+  // console.log('文件测试组件已加载')
   
   // 设置默认的自定义API地址
   if (!customApiUrl.value) {
@@ -1178,7 +1178,7 @@ onMounted(() => {
   handleListFiles()
       }
     }).catch(error => {
-      console.error('获取STS令牌失败:', error)
+      // console.error('获取STS令牌失败:', error)
     })
   }
   
