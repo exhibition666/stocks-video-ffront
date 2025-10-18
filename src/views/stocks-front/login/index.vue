@@ -3,7 +3,7 @@
     <div class="login-card">
       <div class="login-left">
         <div class="login-header">
-          <div class="login-title">股票期权系统</div>
+          <div class="login-title">Gthtsec</div>
           <div class="login-desc">欢迎登录或注册，体验更多精彩内容</div>
         </div>
         <MemberLoginForm />
@@ -29,6 +29,11 @@
         </div>
       </div>
     </div>
+  </div>
+  
+  <!-- ICP备案信息 -->
+  <div class="icp-container">
+    <IcpFooter />
   </div>
 </template>
 
@@ -285,6 +290,35 @@ watch(
   }
   .feature-item {
     margin-bottom: 10px;
+  }
+}
+
+// ICP备案信息容器样式
+.icp-container {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  
+  .icp-footer {
+    border-top: none;
+    padding: 15px 0;
+    
+    .icp-link {
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 14px;
+      text-decoration: none;
+      transition: color 0.3s ease;
+      
+      &:hover {
+        color: #ffffff;
+        text-decoration: underline;
+      }
+    }
   }
 }
 </style>

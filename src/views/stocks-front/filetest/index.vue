@@ -1503,3 +1503,6 @@ onMounted(() => {
   }
 }
 </style>
+
+<!-- ICP备案信息 -->
+<IcpFooter />

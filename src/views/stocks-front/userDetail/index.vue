@@ -604,6 +604,9 @@ const sendCode = async () => {
         </template>
       </el-dialog>
     </div>
+    
+    <!-- ICP备案信息 -->
+    <IcpFooter />
   </div>
 </template>
 

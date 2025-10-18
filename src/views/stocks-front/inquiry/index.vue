@@ -3,12 +3,13 @@ import { useDesign } from '@/hooks/web/useDesign'
 import { useRouter } from 'vue-router'
 import { ref, reactive, onMounted, computed, onUnmounted, watch } from 'vue'
 import StocksHeader from '@/components/StocksHeader/index.vue'
-import { ElMessage, ElLoading, ElCard, ElDescriptions, ElDescriptionsItem, ElDivider, ElRow } from 'element-plus'
+import { ElMessage, ElLoading, ElCard, ElDescriptions, ElDescriptionsItem, ElDivider, ElRow, ElNotification } from 'element-plus'
 import * as XLSX from 'xlsx'
 import { InfoFilled, QuestionFilled } from '@element-plus/icons-vue'
 import { getFilePage } from '@/api/infra/file'
 import { getAppSTSToken, listFilesWithSTS } from '@/api/infra/file/app-sts'
-import { extractOptionInquiryFromExcel, OptionInquiryParams, OptionInquiryResult } from '@/api/stocks-front/option-inquiry'
+import { extractOptionInquiryFromExcel, OptionInquiryParams, OptionInquiryResult, getStockListSimple, getOptionPriceByCondition } from '@/api/stocks-front/option-inquiry'
+import request from '@/config/axios'
 import OSS from 'ali-oss'
 import { useUserStore } from '@/store/modules/user'
 import { getAccessToken } from '@/utils/auth'
@@ -36,9 +37,9 @@ const goToHome = () => {
 // 监听登录状态变化，登录后自动加载数据
 watch(isLoggedIn, (newValue) => {
   if (newValue) {
-    // 用户登录后，自动加载Excel文件
-    // console.log('用户已登录，开始加载Excel文件')
-    loadExcelFilesFromOSS()
+    // 用户登录后，只从API加载股票选项
+    // console.log('用户已登录，开始加载数据...')
+    loadStockOptionsFromAPI()
   }
 }, { immediate: false })
 
@@ -54,11 +55,11 @@ interface ExcelFileInfo {
 // OSS配置
 const OSS_CONFIG_ID = import.meta.env.VITE_OSS_CONFIG_ID || 31
 
-// 文件加载相关状态
-const isStockIndexLoaded = ref(false)
-const isStockOptionsLoaded = ref(false)
-const stockIndexFileName = ref('')
-const stockOptionsFileName = ref('')
+// 文件加载相关状态 - 已禁用OSS加载
+const isStockIndexLoaded = ref(true) // 直接设为true，不再依赖Excel文件
+const isStockOptionsLoaded = ref(true) // 直接设为true，不再依赖Excel文件
+const stockIndexFileName = ref('API接口数据')
+const stockOptionsFileName = ref('API接口数据')
 const isLoadingFiles = ref(false)
 
 // 调试信息
@@ -69,20 +70,34 @@ const debugInfo = ref({
   loadAttempts: 0
 })
 
+// 调试面板显示状态
+const showDebugPanel = ref(false)
+const debugData = ref({
+  stockIndexSheets: [] as string[],
+  stockOptionsSheets: [] as string[],
+  vanillaSheetData: [] as any[],
+  originalVanillaSheetData: [] as any[], // 原始数据
+  selectedStockRow: null as any,
+  availableColumns: [] as string[],
+  searchParams: null as any,
+  dataProcessingInfo: null as any // 数据处理信息
+})
+
 // 表单数据
 const formData = reactive({
   stockCode: '',
   optionType: 'call',
-  term: '1M',
+  term: '2W',
   structureType: 'atm', // 'atm'=平值, 'itm'=实值, 'otm'=虚值, 'custom'=自定义
   strikePriceRatio: '100', // 行权价格比例
   strikePrice: '',
   expiryDate: ''
 })
 
-// 行权价格比例选项
-const itmPrices = ref(['80', '90', '95'])
-const otmPrices = ref(['103', '105', '110', '120'])
+// 行权价格比例选项 - 与数据库字段完全匹配
+const itmPrices = ref(['80', '90', '95']) // 实值期权：80%, 90%, 95%
+const otmPrices = ref(['103', '105', '110']) // 虚值期权：103%, 105%, 110%, 120%
+const discountPrices = ref(['8080', '9070', '9090']) // 折价期权：8080, 8090, 9070, 9080, 9090
 
 // 处理期限变更
 const handleTermChange = (term) => {
@@ -123,9 +138,11 @@ const handleStructureTypeChange = (type) => {
   if (type === 'atm') {
     formData.strikePriceRatio = '100'
   } else if (type === 'itm') {
-    formData.strikePriceRatio = '90'
+    formData.strikePriceRatio = '90' // 默认选择90%
   } else if (type === 'otm') {
-    formData.strikePriceRatio = '103'
+    formData.strikePriceRatio = '103' // 默认选择103%
+  } else if (type === 'discount') {
+    formData.strikePriceRatio = '8080' // 默认选择8080
   }
   
   // 如果不是自定义，根据比例计算行权价格
@@ -134,7 +151,15 @@ const handleStructureTypeChange = (type) => {
   }
 }
 
-// 选择行权价格比例
+// 选择结构和行权价格比例
+const selectStructureAndRatio = (structureType, ratio) => {
+  formData.structureType = structureType
+  formData.strikePriceRatio = ratio
+  formData.optionType = 'call' // 默认选择看涨期权
+  calculateStrikePrice()
+}
+
+// 选择行权价格比例（保留兼容性）
 const selectStrikePriceRatio = (ratio) => {
   formData.strikePriceRatio = ratio
   calculateStrikePrice()
@@ -688,6 +713,9 @@ const processStockIndexDataFromOSS = (fileData) => {
 
     // 更新预览数据
     updatePreviewData()
+    
+    // 检查Excel数据加载状态
+    checkExcelDataStatus()
 
   } catch (error) {
     // console.error('处理股指期权数据失败:', error)
@@ -717,6 +745,9 @@ const processStockOptionsDataFromOSS = (fileData) => {
 
     // 更新预览数据
     updatePreviewData()
+    
+    // 检查Excel数据加载状态
+    checkExcelDataStatus()
 
   } catch (error) {
     // console.error('处理个股期权数据失败:', error)
@@ -745,10 +776,65 @@ const stockOptionsData = ref<any[]>([])
 
 // 股票代码输入相关
 interface StockOption {
+  id: number
+  code: string
+  name: string
   value: string
   label: string
-  name: string
-  price?: number
+  price?: number | null
+  // 添加期权价格字段
+  prices?: {
+    '2W'?: number
+    '1M'?: number
+    '2M'?: number
+    '3M'?: number
+    '6M'?: number
+    '2W (103)'?: number
+    '1M (103)'?: number
+    '2M (103)'?: number
+    '3M (103)'?: number
+    '6M (103)'?: number
+    '2W (105)'?: number
+    '1M (105)'?: number
+    '2M (105)'?: number
+    '3M (105)'?: number
+    '6M (105)'?: number
+    '2W (110)'?: number
+    '1M (110)'?: number
+    '2M (110)'?: number
+    '3M (110)'?: number
+    '6M (110)'?: number
+    '2W (80)'?: number
+    '1M (80)'?: number
+    '2M (80)'?: number
+    '3M (80)'?: number
+    '6M (80)'?: number
+    '2W (90)'?: number
+    '1M (90)'?: number
+    '2M (90)'?: number
+    '3M (90)'?: number
+    '6M (90)'?: number
+    '2W (95)'?: number
+    '1M (95)'?: number
+    '2M (95)'?: number
+    '3M (95)'?: number
+    '6M (95)'?: number
+    '2W (8080)'?: number
+    '1M (8080)'?: number
+    '2M (8080)'?: number
+    '3M (8080)'?: number
+    '6M (8080)'?: number
+    '2W (9090)'?: number
+    '1M (9090)'?: number
+    '2M (9090)'?: number
+    '3M (9090)'?: number
+    '6M (9090)'?: number
+    '2W (9070)'?: number
+    '1M (9070)'?: number
+    '2M (9070)'?: number
+    '3M (9070)'?: number
+    '6M (9070)'?: number
+  }
 }
 
 const stockOptions = ref<StockOption[]>([])
@@ -758,6 +844,7 @@ const searchTimeout = ref<NodeJS.Timeout | null>(null)
 const showSearchResults = ref(false)
 const maxDisplayResults = 5 // 最多显示5个匹配结果
 const selectedStockInfo = ref('') // 显示在输入框中的股票信息
+const isStockOptionsLoading = ref(false) // 股票选项加载状态
 
 // 查询结果
 const queryResult = ref<any>(null)
@@ -766,19 +853,16 @@ const showResult = ref(false)
 const selectedStockName = ref('')  // 存储所选股票的名称
 const calculationMethod = ref('') // 存储计算方法说明
 const showStrikePriceGuide = ref(false) // 控制行权价格指南对话框
+const showImagePreview = ref(false) // 控制图片预览对话框
 
 // 计算是否可以查询
 const canQuery = computed(() => {
   if (formData.structureType === 'custom') {
-    return isStockIndexLoaded.value &&
-           isStockOptionsLoaded.value &&
-           formData.stockCode &&
+    return formData.stockCode &&
            formData.optionType &&
            formData.strikePrice
   } else {
-    return isStockIndexLoaded.value &&
-           isStockOptionsLoaded.value &&
-           formData.stockCode &&
+    return formData.stockCode &&
            formData.optionType &&
            formData.strikePriceRatio
   }
@@ -886,8 +970,104 @@ const process7095SheetData = (data: any[]): StockOption[] => {
   return options
 }
 
-// 从上传的文件中提取股票代码和名称
-const extractStockOptions = () => {
+// 测试API调用
+const testAPI = async () => {
+  console.log('手动测试API调用...')
+  console.log('环境变量:', {
+    VITE_BASE_URL: import.meta.env.VITE_BASE_URL,
+    VITE_API_URL: import.meta.env.VITE_API_URL
+  })
+  await loadStockOptionsFromAPI()
+}
+
+// 从新API加载股票列表
+const loadStockOptionsFromAPI = async () => {
+  try {
+    console.log('开始调用API获取股票列表...')
+    isStockOptionsLoading.value = true
+    
+
+    // 先加载简版列表用于搜索
+    const resp = await getStockListSimple()
+    
+    
+    console.log('API响应:', resp)
+
+    // 检查响应结构：Axios响应中，实际数据在 resp.data 中
+    if (!resp) {
+      console.warn('API返回数据格式异常:', resp)
+      ElMessage.warning('获取股票列表失败1111，将使用备用方案')
+      // 如果API失败，回退到原来的Excel数据提取方式
+      extractStockOptionsFromExcel()
+      return
+    }
+  
+    
+    // 从 resp.data.data 中获取实际的股票列表数据
+    const list = Array.isArray(resp) ? resp : []
+    if (list.length === 0) {
+      console.warn('API返回的数据列表为空')
+      ElMessage.warning('获取股票列表失败2222，将使用备用方案')
+      extractStockOptionsFromExcel()
+      return
+    }
+
+
+    
+    // 转换数据格式，根据新的数据库结构映射
+    const options: StockOption[] = list.map((r: any) => {
+      // 构建价格对象
+      const prices: any = {}
+      
+      // 映射所有价格字段
+      const priceFields = [
+        '2W', '1M', '2M', '3M', '6M',
+        '2W (103)', '1M (103)', '2M (103)', '3M (103)', '6M (103)',
+        '2W (105)', '1M (105)', '2M (105)', '3M (105)', '6M (105)',
+        '2W (110)', '1M (110)', '2M (110)', '3M (110)', '6M (110)',
+        '2W (80)', '1M (80)', '2M (80)', '3M (80)', '6M (80)',
+        '2W (90)', '1M (90)', '2M (90)', '3M (90)', '6M (90)',
+        '2W (95)', '1M (95)', '2M (95)', '3M (95)', '6M (95)',
+        '2W (8080)', '1M (8080)', '2M (8080)', '3M (8080)', '6M (8080)',
+        '2W (9090)', '1M (9090)', '2M (9090)', '3M (9090)', '6M (9090)',
+        '2W (9070)', '1M (9070)', '2M (9070)', '3M (9070)', '6M (9070)'
+      ]
+      
+      priceFields.forEach(field => {
+        if (r[field] && !isNaN(parseFloat(r[field]))) {
+          prices[field] = parseFloat(r[field])
+        }
+      })
+      
+      return {
+        id: r.id || 0,
+        code: r.code,
+        name: r.name,
+        value: r.code,
+        label: `${r.code} ${r.name}`,
+        price: null, // 保持兼容性
+        prices: prices
+      }
+    })
+    
+    stockOptions.value = options
+    filteredStockOptions.value = options.slice(0, maxDisplayResults)
+    
+    console.log('从API加载股票选项成功:', options.length, '个')
+    ElMessage.success(`成功加载 ${options.length} 只股票`)
+    
+  } catch (error) {
+    console.error('从API加载股票选项失败:', error)
+    ElMessage.error('获取股票列表失败3333，将使用备用方案')
+    // 如果API失败，回退到原来的Excel数据提取方式
+    extractStockOptionsFromExcel()
+  } finally {
+    isStockOptionsLoading.value = false
+  }
+}
+
+// 从上传的文件中提取股票代码和名称（备用方案）
+const extractStockOptionsFromExcel = () => {
   try {
     let options: StockOption[] = []
     
@@ -921,7 +1101,9 @@ const extractStockOptions = () => {
     // 如果没有找到7095工作表或没有提取到选项，从香草看涨报价工作表提取
     if (!foundInSheet7095 && allSheetsData.value.stockOptions && allSheetsData.value.stockOptions['香草看涨报价']) {
       const sheetData = allSheetsData.value.stockOptions['香草看涨报价']
-      const processedOptions = extractStocksFromSheet(sheetData, '香草看涨报价')
+      // 处理香草看涨报价表数据：使用第二行作为表头
+      const processedSheetData = processExcelDataWithSecondRowHeader(sheetData)
+      const processedOptions = extractStocksFromSheet(processedSheetData, '香草看涨报价')
       
       if (processedOptions.length > 0) {
         options = processedOptions
@@ -989,8 +1171,9 @@ const extractStocksFromSheet = (sheetData: any[], sheetName: string): StockOptio
       }
     })
   } else if (sheetName === '香草看涨报价') {
-    // 香草看涨报价工作表的处理
+    // 香草看涨报价工作表的处理（使用处理后的数据）
     sheetData.forEach(row => {
+      // 现在列名已经是正确的了
       const code = row['证券代码'] || ''
       const name = row['证券简称'] || ''
       const price = extractStockPrice(row)
@@ -1097,7 +1280,6 @@ const handleStockCodeInput = (query) => {
   
   // 如果输入为空，清除股票信息显示
   if (!query) {
-    selectedStockInfo.value = ''
     selectedStockName.value = ''
   }
   
@@ -1118,8 +1300,7 @@ const handleStockCodeInput = (query) => {
       // 如果有完全匹配的股票代码，自动选择
       const exactMatch = filteredStockOptions.value.find(option => option.value === query)
       if (exactMatch) {
-        selectedStockInfo.value = exactMatch.label
-        selectedStockName.value = exactMatch.label
+        selectedStockName.value = exactMatch.name
       }
     } else {
       filteredStockOptions.value = []
@@ -1131,8 +1312,7 @@ const handleStockCodeInput = (query) => {
 // 选择股票
 const handleSelectStock = (item) => {
   formData.stockCode = item.value
-  selectedStockName.value = item.label
-  selectedStockInfo.value = item.label // 显示完整股票信息（代码+名称）
+  selectedStockName.value = item.name // 只显示股票名称
   showSearchResults.value = false // 隐藏搜索结果
 }
 
@@ -1295,8 +1475,8 @@ const handleStockIndexFileUpload = (event) => {
       
       // console.log('股指报价表数据:', sheetsData)
       
-      // 提取股票代码选项
-      extractStockOptions()
+      // 提取股票代码选项（备用方案）
+      extractStockOptionsFromExcel()
       
       // 如果当前标签是股指报价表，更新预览数据
       if (activeTab.value === 'stockIndex') {
@@ -1382,8 +1562,8 @@ const handleStockOptionsFileUpload = (event) => {
       
       // console.log('期权报价表数据:', sheetsData)
       
-      // 提取股票代码选项
-      extractStockOptions()
+      // 提取股票代码选项（备用方案）
+      extractStockOptionsFromExcel()
       
       // 如果当前标签是期权报价表，更新预览数据
       if (activeTab.value === 'stockOptions') {
@@ -1418,8 +1598,8 @@ const resetStockIndexFile = () => {
     stockIndex: {}
   }
   
-  // 重新提取股票代码选项
-  extractStockOptions()
+  // 重新提取股票代码选项（备用方案）
+  extractStockOptionsFromExcel()
   
   // 如果当前标签是股指报价表，更新预览数据
   if (activeTab.value === 'stockIndex') {
@@ -1439,8 +1619,8 @@ const resetStockOptionsFile = () => {
     stockOptions: {}
   }
   
-  // 重新提取股票代码选项
-  extractStockOptions()
+  // 重新提取股票代码选项（备用方案）
+  extractStockOptionsFromExcel()
   
   // 如果当前标签是期权报价表，更新预览数据
   if (activeTab.value === 'stockOptions') {
@@ -1449,9 +1629,9 @@ const resetStockOptionsFile = () => {
 }
 
 // 查询期权价格
-const queryOptionPrice = () => {
+const queryOptionPrice = async () => {
   if (!canQuery.value) {
-    ElMessage.warning('请先上传文件并填写完整查询信息')
+    ElMessage.warning('请填写完整查询信息')
     return
   }
   
@@ -1464,10 +1644,10 @@ const queryOptionPrice = () => {
   
   isQuerying.value = true
   showResult.value = false
-  
   // 获取选中的股票名称
   selectedStockName.value = selectedOption.label
   
+  try {
   // 构建询价参数
   const inquiryParams: OptionInquiryParams = {
     stockCode: formData.stockCode,
@@ -1485,38 +1665,460 @@ const queryOptionPrice = () => {
     inquiryParams.strikePriceRatio = parseFloat(formData.strikePriceRatio)
   }
   
-  setTimeout(() => {
-    try {
-      // 从Excel数据中提取询价结果
-      const result = extractOptionInquiryFromExcel(
-        allSheetsData.value.stockIndex,
-        allSheetsData.value.stockOptions,
-        inquiryParams
-      )
+  // 输出参数用于对比
+  console.log('开始期权询价前:', {
+    currentPrice: selectedOption.price,
+    optionType: inquiryParams.optionType,
+    stockCode: inquiryParams.stockCode,
+    stockName: selectedOption.name,
+    strikePrice: inquiryParams.strikePrice || 0,
+    structureType: inquiryParams.structureType,
+    term: inquiryParams.term
+  })
+  
+      let result: OptionInquiryResult | null = null
+      
+    // 如果是看涨期权，从新的API接口获取数据
+      if (formData.optionType === 'call') {
+      result = await getCallOptionFromAPI(inquiryParams, selectedOption)
+      } else {
+      // 看跌期权暂时不支持，提示用户
+      ElMessage.warning('看跌期权功能暂未开放，请选择看涨期权')
+      return
+    }
+
+    console.log("result:-----------------------", result)
       
       if (result) {
         // 保存查询结果
         queryResult.value = result
-        
+        // 输出结果用于对比
+        console.log('询价完成:', result)
         // 保存计算方法说明
         calculationMethod.value = generateCalculationMethod(result)
-        
         showResult.value = true
-        ElMessage.success('查询成功')
+      
+      // 使用 Notification 提示查询成功
+      ElNotification({
+        title: '查询成功',
+        message: `已成功获取 ${result.stockName}(${result.stockCode}) 的期权报价信息`,
+        type: 'success',
+        duration: 4000,
+        position: 'top-right'
+      })
       } else {
         ElMessage.error('未能在报价表中找到匹配的期权报价')
       }
     } catch (error) {
-      // console.error('查询出错:', error)
+      console.error('查询出错:', error)
       ElMessage.error('查询失败，请检查输入参数')
     } finally {
       isQuerying.value = false
     }
-  }, 1000)
+}
+
+// 从新的API接口获取看涨期权数据
+const getCallOptionFromAPI = async (params: OptionInquiryParams, stockOption: StockOption): Promise<OptionInquiryResult | null> => {
+  try {
+    // 更新调试数据
+    debugData.value.searchParams = {
+      stockCode: params.stockCode,
+      optionType: params.optionType,
+      term: params.term,
+      structureType: params.structureType,
+      strikePriceRatio: formData.strikePriceRatio
+    }
+    
+    console.log('从API接口获取期权数据:', {
+      stockCode: params.stockCode,
+      term: params.term,
+      structureType: params.structureType,
+      strikePriceRatio: formData.strikePriceRatio
+    })
+    
+    // 根据结构类型和期限确定要查询的condition字段
+    let condition = ''
+    let strikePriceRatio = 100
+    
+    if (params.structureType === 'atm') {
+      // 平值期权 - 直接使用期限字段
+      condition = params.term
+      strikePriceRatio = 100
+    } else if (params.structureType === 'itm') {
+      // 实值期权 - 使用带比例的价格字段
+      const ratio = formData.strikePriceRatio || '90'
+      condition = `${params.term} (${ratio})`
+      strikePriceRatio = parseInt(ratio)
+    } else if (params.structureType === 'otm') {
+      // 虚值期权 - 使用带比例的价格字段
+      const ratio = formData.strikePriceRatio || '103'
+      condition = `${params.term} (${ratio})`
+      strikePriceRatio = parseInt(ratio)
+    } else if (params.structureType === 'discount') {
+      // 折价期权 - 使用带比例的价格字段
+      const ratio = formData.strikePriceRatio || '8080'
+      condition = `${params.term} (${ratio})`
+      strikePriceRatio = parseInt(ratio)
+    }
+    
+    console.log('查询的condition字段:', condition)
+    
+    // 调用API接口获取期权价格
+    const apiParams = {
+      code: params.stockCode,
+      condition: condition
+    }
+    
+    console.log('API请求参数:', apiParams)
+    
+    const response = await getOptionPriceByCondition(apiParams)
+    console.log('API响应:', response)
+      
+    if (!response) {
+      console.error('API调用失败:', response)
+      return null
+    }
+    
+    // 解析期权价格 - 处理带百分号的数据和'-'的情况
+    let optionPrice: string | number
+    let canDisplay = true
+    
+    if (typeof response === 'string') {
+      if (response.includes('%')) {
+        // 如果带百分号，直接使用该值
+        optionPrice = response
+        console.log('获取到的期权价格（带百分号）:', optionPrice)
+      } else if (response === '-') {
+        // 如果是'-'，表示没有值
+        //canDisplay = false
+        optionPrice = '该股票暂时无法显示报价'
+        console.log('该股票暂时无法显示报价')
+    } else {
+        // 如果是纯数字，转换为百分比格式
+        const numValue = parseFloat(response)
+        if (!isNaN(numValue) && numValue > 0) {
+          optionPrice = `${numValue}%`
+          console.log('获取到的期权价格（数字转换）:', optionPrice)
+        } else {
+          canDisplay = false
+          console.log('API返回的期权价格无效:', response)
+        }
+      }
+    } else {
+      canDisplay = false
+      console.log('API返回的数据格式异常:', response)
+    }
+    
+    // 如果无法显示，返回null
+    if (!canDisplay) {
+      return null
+    }
+    
+    // 计算行权价格（这里需要股票当前价格，暂时使用模拟价格）
+    const currentPrice = stockOption.price || generateMockPrice(params.stockCode)
+    const strikePrice = (currentPrice * strikePriceRatio) / 100
+    
+    // 计算到期日
+    const expiryDate = params.expiryDate || calculateExpiryDate(params.term)
+    
+    // 直接使用API返回的百分比值作为隐含波动率
+    const impliedVolatility = optionPrice
+
+    console.log("数据类型：" + typeof impliedVolatility)
+
+    // 直接使用API返回的数据，不生成券商报价
+    const brokerQuotes = []
+
+    return {
+      stockCode: params.stockCode,
+      stockName: stockOption.name,
+      currentPrice: currentPrice,
+      optionType: 'call',
+      term: params.term,
+      strikePrice: parseFloat(strikePrice.toFixed(2)),
+      strikePriceRatio: parseFloat(strikePriceRatio.toFixed(2)),
+      expiryDate: expiryDate,
+      impliedVolatility: typeof impliedVolatility === 'string' ? impliedVolatility : `${impliedVolatility}%`,
+      quoteSource: 'API接口期权报价',
+      quoteTime: new Date().toISOString(),
+      brokerQuotes
+    }
+    
+  } catch (error) {
+    console.error('从API接口获取期权数据失败:', error)
+    return null
+  }
+}
+
+// 从价格字段名中提取行权价格比例
+const extractStrikePriceRatioFromField = (fieldName: string): number | null => {
+  const match = fieldName.match(/\((\d+)\)/)
+  if (match) {
+    const ratio = parseInt(match[1])
+    return isNaN(ratio) ? null : ratio
+  }
+  return null
+}
+
+// 从基础价格生成多家券商报价
+// baseIV为香草看涨报价sheet原始单元格数值（如0.0435），此处假定调用方已传入
+const generateBrokerQuotesFromBasePrice = (baseIV: number, stockCode: string): any[] => {
+  const brokers = [
+    { code: 'YAQZ', name: 'YAQZ', color: '#E74C3C', bias: 0.003 },   // 偏向高波动率
+    { code: 'YHQZ', name: 'YHQZ', color: '#3498DB', bias: -0.002 },  // 偏向低波动率
+    { code: 'ZXZZ', name: 'ZXZZ', color: '#2ECC71', bias: 0.001 },   // 中性偏高
+    { code: 'ZSQH', name: 'ZSQH', color: '#F39C12', bias: -0.001 },  // 中性偏低
+    { code: 'ZJ', name: 'ZJ', color: '#9B59B6', bias: 0.004 },       // 激进高波动率
+    { code: 'GJQZ', name: 'GJQZ', color: '#F1C40F', bias: -0.003 }   // 保守低波动率
+  ]
+  
+  // 使用更复杂的种子算法确保结果一致性和分散性
+  const stockSeed = stockCode.split('').reduce((acc, char, idx) => {
+    return acc + char.charCodeAt(0) * (idx + 1) * 17 // 增加位置权重和质数因子
+  }, 0)
+  
+  return brokers.map((broker, index) => {
+    // 生成更分散的券商特定种子
+    const brokerSeed = broker.code.split('').reduce((acc, char, idx) => {
+      return acc + char.charCodeAt(0) * (idx + 1) * 23 // 使用不同质数
+    }, 0)
+    
+    // 组合种子并增加随机性
+    const combinedSeed = ((stockSeed * 31 + brokerSeed * 37 + index * 41) % 10000) / 10000
+    
+    // ±0.8%扰动范围，确保更大差异
+    const randomVariance = (combinedSeed - 0.5) * 0.016 // -0.008~+0.008
+    
+    // 结合券商特定偏好和随机扰动
+    let iv = baseIV + broker.bias + randomVariance
+    
+    // 确保IV不会为负且在合理范围内
+    if (iv < 0.001) iv = 0.001 // 最小0.1%
+    //if (iv > 0.15) iv = 0.15   // 最大15%
+    
+    return {
+      broker: broker.name,
+      impliedVolatility: `${(iv * 100).toFixed(2)}%`,
+      color: broker.color
+    }
+  })
+}
+
+// 从价格反推隐含波动率
+const calculateImpliedVolatilityFromPrice = (optionPrice: number, stockPrice: number, strikePrice: number, term: string): number => {
+  // 简化的隐含波动率计算
+  // 实际应用中应使用牛顿法等数值方法求解
+  
+  const timeToExpiry = getTermFactorInYears(term)  // 转换为年份
+  const moneyness = strikePrice / stockPrice
+  
+  // 基于ATM隐含波动率的经验公式
+  let baseIV = 0.20  // 基础隐含波动率20%
+  
+  // 根据价格水平调整
+  const priceRatio = optionPrice / stockPrice
+  if (priceRatio > 0.1) baseIV += 0.05
+  if (priceRatio > 0.2) baseIV += 0.05
+  
+  // 根据期限调整
+  if (timeToExpiry < 0.25) baseIV += 0.02  // 短期期权波动率通常更高
+  if (timeToExpiry > 1) baseIV -= 0.02     // 长期期权波动率通常更低
+  
+  // 根据行权价调整（波动率微笑）
+  if (moneyness < 0.95 || moneyness > 1.05) baseIV += 0.01
+  
+  return baseIV * 100  // 转换为百分比
+}
+
+// 获取期限的年份因子
+const getTermFactorInYears = (term: string): number => {
+  switch (term) {
+    case '2W': return 2/52
+    case '1M': return 1/12
+    case '2M': return 2/12
+    case '3M': return 3/12
+    case '6M': return 6/12
+    case '12M': return 1
+    default: return 1/12
+  }
+}
+
+// 计算Delta
+const calculateDelta = (optionType: 'call' | 'put', strikePriceRatio: number): number => {
+  if (optionType === 'call') {
+    // 看涨期权Delta范围通常为0-1
+    if (strikePriceRatio < 80) return 0.95      // 深度实值
+    if (strikePriceRatio < 90) return 0.85      // 实值
+    if (strikePriceRatio < 95) return 0.70      // 轻度实值
+    if (strikePriceRatio < 98) return 0.60      // 接近平值(实值侧)
+    if (strikePriceRatio < 102) return 0.50     // 平值
+    if (strikePriceRatio < 105) return 0.40     // 接近平值(虚值侧)
+    if (strikePriceRatio < 110) return 0.30     // 轻度虚值
+    if (strikePriceRatio < 120) return 0.15     // 虚值
+    return 0.05                                 // 深度虚值
+  } else {
+    // 看跌期权Delta范围通常为-1-0
+    if (strikePriceRatio < 80) return -0.05     // 深度虚值
+    if (strikePriceRatio < 90) return -0.15     // 虚值
+    if (strikePriceRatio < 95) return -0.30     // 轻度虚值
+    if (strikePriceRatio < 98) return -0.40     // 接近平值(虚值侧)
+    if (strikePriceRatio < 102) return -0.50    // 平值
+    if (strikePriceRatio < 105) return -0.60    // 接近平值(实值侧)
+    if (strikePriceRatio < 110) return -0.70    // 轻度实值
+    if (strikePriceRatio < 120) return -0.85    // 实值
+    return -0.95                                // 深度实值
+  }
+}
+
+// 计算Gamma
+const calculateGamma = (term: string, priceRatio: number = 100): number => {
+  // Gamma通常在0.01-0.2之间，期限越短Gamma越大
+  // 平值期权的Gamma最大，实值和虚值期权的Gamma较小
+  
+  // 基础期限因子
+  const termFactor = {
+    '2W': 0.18,
+    '1M': 0.15,
+    '2M': 0.12,
+    '3M': 0.09,
+    '6M': 0.06,
+    '12M': 0.03
+  }[term] || 0.1
+  
+  // 根据行权价格比例确定Gamma调整因子
+  const priceRatioFactor = Math.abs(priceRatio - 100) <= 2 ? 1.0 :  // 接近平值，Gamma最大
+                          Math.abs(priceRatio - 100) <= 5 ? 0.9 :  // 轻微偏离平值，Gamma略小
+                          Math.abs(priceRatio - 100) <= 10 ? 0.7 : // 中度偏离平值，Gamma更小
+                          0.5;                                     // 远离平值，Gamma最小
+  
+  return parseFloat((termFactor * priceRatioFactor).toFixed(4))
+}
+
+// 计算Theta
+const calculateTheta = (term: string, priceRatio: number = 100, optionType: 'call' | 'put' = 'call'): number => {
+  // Theta通常为负值，期限越短绝对值越大
+  // 平值期权的Theta绝对值最大，实值和虚值期权的Theta绝对值较小
+  
+  // 基础期限因子
+  const termFactor = {
+    '2W': -0.05,
+    '1M': -0.04,
+    '2M': -0.03,
+    '3M': -0.025,
+    '6M': -0.015,
+    '12M': -0.01
+  }[term] || -0.02
+  
+  // 对于深度实值看跌或深度实值看涨，Theta可能为正
+  if ((optionType === 'put' && priceRatio > 120) || (optionType === 'call' && priceRatio < 80)) {
+    return parseFloat((Math.abs(termFactor) * 0.1).toFixed(4)) // 极小的正值
+  }
+  
+  // 根据行权价格比例确定Theta调整因子
+  const priceRatioFactor = Math.abs(priceRatio - 100) <= 2 ? 1.0 :  // 接近平值，Theta绝对值最大
+                          Math.abs(priceRatio - 100) <= 5 ? 0.9 :  // 轻微偏离平值，Theta绝对值略小
+                          Math.abs(priceRatio - 100) <= 10 ? 0.7 : // 中度偏离平值，Theta绝对值更小
+                          0.5;                                     // 远离平值，Theta绝对值最小
+  
+  return parseFloat((termFactor * priceRatioFactor).toFixed(4))
+}
+
+// 计算Vega
+const calculateVega = (term: string, priceRatio: number = 100): number => {
+  // Vega通常在0.1-0.3之间，期限越长Vega越大
+  // 平值期权的Vega最大，实值和虚值期权的Vega较小
+  
+  // 基础期限因子
+  const termFactor = {
+    '2W': 0.12,
+    '1M': 0.15,
+    '2M': 0.18,
+    '3M': 0.21,
+    '6M': 0.25,
+    '12M': 0.3
+  }[term] || 0.2
+  
+  // 根据行权价格比例确定Vega调整因子
+  const priceRatioFactor = Math.abs(priceRatio - 100) <= 2 ? 1.0 :  // 接近平值，Vega最大
+                          Math.abs(priceRatio - 100) <= 5 ? 0.9 :  // 轻微偏离平值，Vega略小
+                          Math.abs(priceRatio - 100) <= 10 ? 0.7 : // 中度偏离平值，Vega更小
+                          0.5;                                     // 远离平值，Vega最小
+  
+  return parseFloat((termFactor * priceRatioFactor).toFixed(4))
+}
+
+// 获取期限的中文显示名称
+const getTermDisplayName = (term: string): string => {
+  const termMap = {
+    '2W': '2周 (2W)',
+    '1M': '1个月 (1M)',
+    '2M': '2个月 (2M)',
+    '3M': '3个月 (3M)',
+    '6M': '6个月 (6M)',
+    '12M': '12个月 (12M)'
+  }
+  return termMap[term] || term
+}
+
+// 计算到期日
+const calculateExpiryDate = (term: string): string => {
+  const today = new Date()
+  const expiryDate = new Date(today)
+  
+  switch (term) {
+    case '2W':
+      expiryDate.setDate(today.getDate() + 14)
+      break
+    case '1M':
+      expiryDate.setMonth(today.getMonth() + 1)
+      break
+    case '2M':
+      expiryDate.setMonth(today.getMonth() + 2)
+      break
+    case '3M':
+      expiryDate.setMonth(today.getMonth() + 3)
+      break
+    case '6M':
+      expiryDate.setMonth(today.getMonth() + 6)
+      break
+    case '12M':
+      expiryDate.setFullYear(today.getFullYear() + 1)
+      break
+  }
+  
+  // 格式化日期为YYYY-MM-DD
+  const year = expiryDate.getFullYear()
+  const month = String(expiryDate.getMonth() + 1).padStart(2, '0')
+  const day = String(expiryDate.getDate()).padStart(2, '0')
+  
+  return `${year}-${month}-${day}`
 }
 
 // 生成计算方法说明
 const generateCalculationMethod = (result: OptionInquiryResult): string => {
+  const isFromAPI = result.quoteSource === 'API接口期权报价'
+  
+  if (isFromAPI) {
+    return `
+      <p>本询价结果直接来源于API接口期权报价：</p>
+      <ul>
+        <li>股票代码: ${result.stockCode}</li>
+        <li>股票名称: ${result.stockName}</li>
+        <li>期权类型: ${result.optionType === 'call' ? '看涨期权' : '看跌期权'}</li>
+        <li>行权价格: ${result.strikePrice}</li>
+        <li>行权价格比例: ${result.strikePriceRatio ? result.strikePriceRatio + '%' : '自定义'}</li>
+        <li>期限: ${result.term}</li>
+        <li>到期日: ${result.expiryDate}</li>
+      </ul>
+      <p>数据来源：</p>
+      <ul>
+        <li>隐含波动率直接来自后端API接口的实际报价数据</li>
+        <li>数据实时更新，确保准确性</li>
+        <li>基于真实市场数据，具有较高的参考价值</li>
+      </ul>
+      <p class="note">注：数据来源于真实API接口报价，具有较高的参考价值。</p>
+    `
+  } else {
   return `
     <p>本询价结果基于以下因素计算：</p>
     <ul>
@@ -1538,22 +2140,25 @@ const generateCalculationMethod = (result: OptionInquiryResult): string => {
     </ul>
     <p class="note">注：实际交易中，期权价格受多种市场因素影响，本结果仅供参考。</p>
   `
+  }
 }
 
 onMounted(async () => {
   // console.log('股票期权询价页面已加载')
-  // 设置默认期限为1个月
-  handleTermChange('1M')
+  // 设置默认期限为2周
+  handleTermChange('2W')
 
   // 添加点击外部关闭搜索结果的事件监听
   document.addEventListener('click', handleClickOutside)
 
-  // 只有在用户已登录时才自动加载Excel文件
+  // 只从API加载股票选项
   if (isLoggedIn.value) {
-    // console.log('用户已登录，开始自动加载Excel文件...')
-    await loadExcelFilesFromOSS()
+    // console.log('用户已登录，开始从API加载股票选项...')
+    // 设置初始加载状态
+    isStockOptionsLoading.value = true
+    await loadStockOptionsFromAPI()
   } else {
-    // console.log('用户未登录，跳过Excel文件加载')
+    // console.log('用户未登录，跳过数据加载')
   }
 })
 
@@ -1561,6 +2166,127 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
 })
+
+// 处理Excel数据：去除_EMPTY表头行，使用包含"证券代码"的行作为表头
+const processExcelDataWithSecondRowHeader = (sheetData: any[]): any[] => {
+  if (!Array.isArray(sheetData) || sheetData.length < 1) {
+    console.warn('Excel数据行数不足，无法处理')
+    return sheetData
+  }
+  
+  console.log('=== 处理Excel数据：去除_EMPTY表头行，使用包含"证券代码"的行作为表头 ===')
+  console.log('原始数据行数:', sheetData.length)
+  
+  // 找到包含"证券代码"的行作为表头
+  let headerRowIndex = -1
+  let headerRow = null
+  
+  for (let i = 0; i < sheetData.length; i++) {
+    const row = sheetData[i]
+    const values = Object.values(row)
+    
+    // 检查这一行是否包含"证券代码"
+    const hasSecurityCode = values.some(value => 
+      String(value).includes('证券代码')
+    )
+    
+    if (hasSecurityCode) {
+      headerRowIndex = i
+      headerRow = row
+      console.log(`找到表头行（第${i + 1}行）:`, row)
+      break
+    }
+  }
+  
+  if (headerRowIndex === -1) {
+    console.warn('未找到包含"证券代码"的表头行')
+    return sheetData
+  }
+  
+  // 获取表头行的值作为新的列名
+  const newHeaders = Object.values(headerRow)
+  console.log('新的列名:', newHeaders)
+  
+  // 从表头行的下一行开始作为实际数据
+  const actualData = sheetData.slice(headerRowIndex + 1)
+  console.log(`从第${headerRowIndex + 2}行开始的数据行数:`, actualData.length)
+  
+  // 过滤掉包含_EMPTY的行，保留有效数据行
+  const validData = actualData.filter((row, index) => {
+    // 检查这一行是否包含_EMPTY
+    const hasEmpty = Object.values(row).some(value => 
+      String(value).includes('_EMPTY') || String(value).includes('EMPTY')
+    )
+    
+    // 如果这一行包含_EMPTY，则过滤掉
+    if (hasEmpty) {
+      console.log(`过滤掉第${headerRowIndex + 2 + index}行（包含_EMPTY）:`, row)
+      return false
+    }
+    
+    // 检查这一行是否有有效的股票代码
+    const hasValidStockCode = Object.values(row).some(value => 
+      String(value).includes('.SH') || String(value).includes('.SZ') || 
+      /^\d{6}$/.test(String(value))
+    )
+    
+    if (!hasValidStockCode) {
+      console.log(`过滤掉第${headerRowIndex + 2 + index}行（无有效股票代码）:`, row)
+      return false
+    }
+    
+    return true
+  })
+  
+  console.log(`过滤后有效数据行数: ${validData.length}/${actualData.length}`)
+  
+  // 重新构建数据，使用表头行的值作为列名
+  const processedData = validData.map((row, index) => {
+    const newRow: any = {}
+    
+    // 使用表头行的值作为列名，按列索引对应
+    const rowValues = Object.values(row)
+    newHeaders.forEach((header, colIndex) => {
+      if (colIndex < rowValues.length) {
+        newRow[header] = rowValues[colIndex]
+      }
+    })
+    
+    return newRow
+  })
+  
+  console.log('处理后的数据行数:', processedData.length)
+  console.log('处理后的第一行数据:', processedData[0])
+  
+  return processedData
+}
+
+// 检查Excel数据加载状态
+const checkExcelDataStatus = () => {
+  console.log('=== Excel数据加载状态检查 ===')
+  console.log('股指报价表工作表:', Object.keys(allSheetsData.value.stockIndex || {}))
+  console.log('期权报价表工作表:', Object.keys(allSheetsData.value.stockOptions || {}))
+  
+  if (allSheetsData.value.stockOptions && allSheetsData.value.stockOptions['香草看涨报价']) {
+    const vanillaSheet = allSheetsData.value.stockOptions['香草看涨报价']
+    console.log('香草看涨报价表原始数据行数:', vanillaSheet.length)
+    if (vanillaSheet.length > 0) {
+      console.log('香草看涨报价表原始列名:', Object.keys(vanillaSheet[0]))
+      console.log('香草看涨报价表前3行原始数据:', vanillaSheet.slice(0, 3))
+      
+      // 处理数据
+      const processedSheet = processExcelDataWithSecondRowHeader(vanillaSheet)
+      console.log('处理后的列名:', Object.keys(processedSheet[0] || {}))
+      console.log('处理后的前3行数据:', processedSheet.slice(0, 3))
+    }
+  } else {
+    console.log('未找到香草看涨报价工作表')
+  }
+  
+  // 更新调试数据
+  debugData.value.stockIndexSheets = Object.keys(allSheetsData.value.stockIndex || {})
+  debugData.value.stockOptionsSheets = Object.keys(allSheetsData.value.stockOptions || {})
+}
 
 // 保存询价结果
 const savedQuotes = ref<any[]>([])
@@ -1591,15 +2317,7 @@ const compareQuotes = () => {
 // 行权价格指南对话框已在上面定义
 // const showStrikePriceGuide = ref(false)
 
-// 格式化报价时间
-const formatQuoteTime = (timeString: string): string => {
-  try {
-    const date = new Date(timeString)
-    return date.toLocaleString()
-  } catch (error) {
-    return timeString
-  }
-}
+
 </script>
 
 <template>
@@ -1637,7 +2355,104 @@ const formatQuoteTime = (timeString: string): string => {
       
       <div class="inquiry-content">
         <div class="inquiry-form-container">
+          <!-- 调试面板 -->
+          <div class="debug-panel" v-if="showDebugPanel">
+            <h3 class="debug-title">调试信息</h3>
+            
+            <div class="debug-section">
+              <h4>搜索参数</h4>
+              <pre>{{ JSON.stringify(debugData.searchParams, null, 2) }}</pre>
+            </div>
+            
+            <div class="debug-section">
+              <h4>股指报价表工作表</h4>
+              <ul>
+                <li v-for="sheet in debugData.stockIndexSheets" :key="sheet">{{ sheet }}</li>
+              </ul>
+            </div>
+            
+            <div class="debug-section">
+              <h4>期权报价表工作表</h4>
+              <ul>
+                <li v-for="sheet in debugData.stockOptionsSheets" :key="sheet">{{ sheet }}</li>
+              </ul>
+            </div>
+            
+            <div class="debug-section" v-if="debugData.selectedStockRow">
+              <h4>选中的股票行数据</h4>
+              <pre>{{ JSON.stringify(debugData.selectedStockRow, null, 2) }}</pre>
+            </div>
+            
+            <div class="debug-section">
+              <h4>可用列名</h4>
+              <div class="column-list">
+                <span v-for="col in debugData.availableColumns" :key="col" class="column-item">{{ col }}</span>
+              </div>
+            </div>
+            
+            <div class="debug-section" v-if="debugData.dataProcessingInfo">
+              <h4>数据处理信息</h4>
+              <div class="processing-info">
+                <p><strong>原始数据行数:</strong> {{ debugData.dataProcessingInfo.originalRows }}</p>
+                <p><strong>表头行号:</strong> 第{{ debugData.dataProcessingInfo.headerRowIndex }}行</p>
+                <p><strong>总数据行数（从表头行后开始）:</strong> {{ debugData.dataProcessingInfo.totalDataRows }}</p>
+                <p><strong>过滤掉的行数（_EMPTY等）:</strong> {{ debugData.dataProcessingInfo.filteredRows }}</p>
+                <p><strong>处理后数据行数:</strong> {{ debugData.dataProcessingInfo.processedRows }}</p>
+                <p><strong>原始列数:</strong> {{ debugData.dataProcessingInfo.originalHeaders.length }}</p>
+                <p><strong>处理后列数:</strong> {{ debugData.dataProcessingInfo.processedHeaders.length }}</p>
+              </div>
+            </div>
+            
+            <div class="debug-section" v-if="debugData.originalVanillaSheetData.length > 0">
+              <h4>原始数据（前3行）</h4>
+              <div class="table-container">
+                <table class="debug-table">
+                  <thead>
+                    <tr>
+                      <th v-for="col in Object.keys(debugData.originalVanillaSheetData[0] || {})" :key="col">{{ col }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(row, index) in debugData.originalVanillaSheetData" :key="index">
+                      <td v-for="col in Object.keys(row)" :key="col">{{ row[col] }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            
+            <div class="debug-section" v-if="debugData.vanillaSheetData.length > 0">
+              <h4>处理后数据（前5行）</h4>
+              <div class="table-container">
+                <table class="debug-table">
+                  <thead>
+                    <tr>
+                      <th v-for="col in Object.keys(debugData.vanillaSheetData[0] || {})" :key="col">{{ col }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(row, index) in debugData.vanillaSheetData" :key="index">
+                      <td v-for="col in Object.keys(row)" :key="col">{{ row[col] }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          
           <h2 class="section-title" v-if="false">Excel文件加载状态</h2>
+
+          <!-- 调试按钮 - 已隐藏 -->
+          <div class="debug-controls" v-if="false">
+            <el-button 
+              type="info" 
+              size="small" 
+              @click="showDebugPanel = !showDebugPanel"
+              :icon="showDebugPanel ? 'el-icon-close' : 'el-icon-view'"
+            >
+              {{ showDebugPanel ? '隐藏调试信息' : '显示调试信息' }}
+            </el-button>
+          </div>
 
           <div class="file-status-section" v-if="false">
             <div class="file-status-item">
@@ -1804,18 +2619,91 @@ const formatQuoteTime = (timeString: string): string => {
           
           <div class="divider"></div>
           
+          <!-- 数据加载状态提示 -->
+          <div class="data-loading-status" v-if="isLoggedIn">
+            <el-alert
+              :title="isStockOptionsLoading ? '数据加载中，请稍后再查询' : '数据加载完成，可进行查询'"
+              :type="isStockOptionsLoading ? 'warning' : 'success'"
+              :closable="false"
+              show-icon
+            >
+              <template #default>
+                <p v-if="isStockOptionsLoading">正在加载股票数据，请稍等...</p>
+                <p v-else>股票数据已加载完成，您可以开始查询期权价格</p>
+              </template>
+            </el-alert>
+          </div>
+          
+          <div class="section-header">
           <h2 class="section-title">查询参数</h2>
+            <div class="section-subtitle">填写以下参数进行期权询价</div>
+          </div>
+          
+          <!-- 数据来源说明 - 已隐藏 -->
+          <div class="data-source-notice" v-if="false">
+            <el-alert
+              title="数据来源说明"
+              type="info"
+              :closable="false"
+              show-icon
+            >
+              <template #default>
+                <p>本系统现已升级为API接口模式，不再需要上传Excel文件。</p>
+                <p>期权价格数据直接通过后端接口获取，确保数据的实时性和准确性。</p>
+              </template>
+            </el-alert>
+          </div>
+          
+          <!-- 测试API调用按钮 - 已隐藏 -->
+          <div class="api-test-section" v-if="false">
+            <el-button 
+              type="info" 
+              size="small" 
+              @click="testAPI"
+              :loading="isStockOptionsLoading"
+            >
+              测试API调用
+            </el-button>
+            <span class="api-status">
+              API状态: {{ stockOptions.length > 0 ? '已加载' : '未加载' }}
+            </span>
+            <span class="data-info" v-if="stockOptions.length > 0">
+              数据条数: {{ stockOptions.length }}
+            </span>
+            <span class="data-source-info">
+              数据来源: 后端API接口
+            </span>
+          </div>
           <el-form label-position="top">
-            <el-form-item label="股票代码">
+            <el-form-item label="股票代码" class="enhanced-form-item">
               <div class="stock-code-input-container">
                 <el-input
                   v-model="formData.stockCode"
                   placeholder="请输入股票代码"
-                  class="stock-code-input"
+                  class="stock-code-input enhanced-input"
                   @input="handleStockCodeInput"
                   @focus="handleFocus"
-                />
-                <div v-if="selectedStockInfo" class="selected-stock-info">{{ selectedStockInfo }}</div>
+                >
+                  <template #prefix>
+                    <i class="el-icon-search"></i>
+                  </template>
+                </el-input>
+                
+                <!-- 股票名称显示 -->
+                <div v-if="selectedStockName" class="selected-stock-name">
+                  <i class="el-icon-check"></i>
+                  {{ selectedStockName }}
+                </div>
+                
+                <!-- 股票选项加载状态 -->
+                <div v-if="isStockOptionsLoading" class="stock-loading-status">
+                  <i class="el-icon-loading"></i> 正在加载股票列表...
+                </div>
+                
+                <!-- 股票选项数量提示 - 已隐藏 -->
+                <div v-else-if="false" class="stock-count-hint">
+                  已加载 {{ stockOptions.length }} 只股票
+                </div>
                 
                 <div v-if="showSearchResults && filteredStockOptions.length > 0" class="stock-search-results">
                   <div v-if="isSearching" class="search-loading">
@@ -1842,86 +2730,76 @@ const formatQuoteTime = (timeString: string): string => {
               </div>
             </el-form-item>
             
-            <el-form-item label="期限">
+            <el-form-item label="期限" class="enhanced-form-item">
               <div class="term-options">
-                <el-radio-group v-model="formData.term" @change="handleTermChange">
-                  <el-radio-button label="2W">2周</el-radio-button>
-                  <el-radio-button label="1M">1个月</el-radio-button>
-                  <el-radio-button label="2M">2个月</el-radio-button>
-                  <el-radio-button label="3M">3个月</el-radio-button>
-                  <el-radio-button label="6M">6个月</el-radio-button>
-                  <el-radio-button label="12M">12个月</el-radio-button>
+                <el-radio-group v-model="formData.term" @change="handleTermChange" class="enhanced-radio-group">
+                  <el-radio-button label="2W" class="term-radio">2周</el-radio-button>
+                  <el-radio-button label="1M" class="term-radio">1个月</el-radio-button>
+                  <el-radio-button label="2M" class="term-radio">2个月</el-radio-button>
+                  <el-radio-button label="3M" class="term-radio">3个月</el-radio-button>
+                  <el-radio-button label="6M" class="term-radio">6个月</el-radio-button>
                 </el-radio-group>
               </div>
             </el-form-item>
             
-            <el-form-item label="结构">
-              <div class="option-structure">
-                <div class="structure-type">
-                  <div class="structure-label">类型:</div>
-                  <el-radio-group v-model="formData.structureType" @change="handleStructureTypeChange">
-                    <el-radio-button label="atm">平值</el-radio-button>
-                    <el-radio-button label="itm">实值</el-radio-button>
-                    <el-radio-button label="otm">虚值</el-radio-button>
-                    <el-radio-button label="custom">自定义</el-radio-button>
-                  </el-radio-group>
+            <el-form-item label="结构" class="enhanced-form-item">
+              <div class="structure-options enhanced-structure">
+                <!-- 平值 -->
+                <div class="structure-row">
+                  <div class="structure-label">平值:</div>
+                  <div class="structure-tags">
+                    <el-tag 
+                      :class="['structure-tag', formData.structureType === 'atm' && formData.strikePriceRatio === '100' ? 'active' : '']"
+                      @click="selectStructureAndRatio('atm', '100')"
+                    >
+                      100call
+                    </el-tag>
+                </div>
                 </div>
                 
-                <div class="option-type">
-                  <div class="option-type-label">方向:</div>
-                  <el-radio-group v-model="formData.optionType">
-                    <el-radio-button label="call">看涨(Call)</el-radio-button>
-                    <el-radio-button label="put">看跌(Put)</el-radio-button>
-                  </el-radio-group>
-                </div>
-              </div>
-            </el-form-item>
-            
-            <el-form-item label="行权价格">
-              <div class="strike-price-options" v-if="formData.structureType === 'atm'">
-                <el-tag class="strike-price-tag active">100call</el-tag>
-              </div>
-              
-              <div class="strike-price-options" v-else-if="formData.structureType === 'itm'">
+                <!-- 实值 -->
+                <div class="structure-row">
+                  <div class="structure-label">实值:</div>
+                  <div class="structure-tags">
                 <el-tag 
                   v-for="price in itmPrices" 
                   :key="price" 
-                  :class="['strike-price-tag', formData.strikePriceRatio === price ? 'active' : '']"
-                  @click="selectStrikePriceRatio(price)"
+                      :class="['structure-tag', formData.structureType === 'itm' && formData.strikePriceRatio === price ? 'active' : '']"
+                      @click="selectStructureAndRatio('itm', price)"
                 >
-                  {{ price }}call
+                      {{ price }}call
                 </el-tag>
+                  </div>
               </div>
               
-              <div class="strike-price-options" v-else-if="formData.structureType === 'otm'">
+                <!-- 虚值 -->
+                <div class="structure-row">
+                  <div class="structure-label">虚值:</div>
+                  <div class="structure-tags">
                 <el-tag 
                   v-for="price in otmPrices" 
                   :key="price" 
-                  :class="['strike-price-tag', formData.strikePriceRatio === price ? 'active' : '']"
-                  @click="selectStrikePriceRatio(price)"
+                      :class="['structure-tag', formData.structureType === 'otm' && formData.strikePriceRatio === price ? 'active' : '']"
+                      @click="selectStructureAndRatio('otm', price)"
                 >
-                  {{ price }}call
+                      {{ price }} call
                 </el-tag>
+                  </div>
               </div>
               
-              <div v-else class="custom-strike-price">
-                <el-input 
-                  v-model="formData.strikePrice" 
-                  placeholder="请输入行权价格" 
-                  class="w-full"
+                <!-- 折价 -->
+                <div class="structure-row">
+                  <div class="structure-label">折价:</div>
+                  <div class="structure-tags">
+                <el-tag 
+                  v-for="price in discountPrices" 
+                  :key="price" 
+                      :class="['structure-tag', formData.structureType === 'discount' && formData.strikePriceRatio === price ? 'active' : '']"
+                      @click="selectStructureAndRatio('discount', price)"
                 >
-                  <template #append>
-                    <el-tooltip content="行权价格是期权合约规定的买卖标的资产的价格" placement="top">
-                      <el-icon><QuestionFilled /></el-icon>
-                    </el-tooltip>
-                  </template>
-                </el-input>
-                <div class="help-text">
-                  <p>
-                    <el-icon><InfoFilled /></el-icon>
-                    您可以从券商APP的期权报价页面获取行权价格信息
-                    <el-button link type="primary" @click="showStrikePriceGuide = true">查看详细指南</el-button>
-                  </p>
+                  {{ price }}
+                </el-tag>
+              </div>
                 </div>
               </div>
             </el-form-item>
@@ -1938,16 +2816,20 @@ const formatQuoteTime = (timeString: string): string => {
               />
             </el-form-item>
             
-            <el-form-item>
-              <el-button
-                type="primary"
-                :loading="isQuerying"
-                @click="queryOptionPrice"
-                :disabled="!canQuery"
-                style="width: 100%"
-              >
-                询价
-              </el-button>
+            <el-form-item class="enhanced-form-item inquiry-form-item">
+              <div class="inquiry-button-container">
+                <el-button
+                  type="primary"
+                  :loading="isQuerying"
+                  @click="queryOptionPrice"
+                  :disabled="!canQuery"
+                  class="inquiry-button"
+                  size="large"
+                >
+                  <i class="el-icon-search"></i>
+                  询价
+                </el-button>
+              </div>
             </el-form-item>
           </el-form>
         </div>
@@ -1958,31 +2840,52 @@ const formatQuoteTime = (timeString: string): string => {
             <el-row :gutter="20">
               <!-- 期权基本信息 -->
               <el-col :span="24">
-                <el-card class="result-card">
+                <el-card class="result-card option-info-card">
                   <template #header>
                     <div class="card-header">
-                      <span>期权信息</span>
+                      <span class="header-title">期权信息</span>
+                      <el-tag type="primary" size="small" class="header-tag">期权详情</el-tag>
                     </div>
                   </template>
                   
-                  <el-descriptions :column="1" border>
-                    <el-descriptions-item label="股票代码">{{ queryResult.stockCode }}</el-descriptions-item>
-                    <el-descriptions-item label="股票名称">{{ queryResult.stockName }}</el-descriptions-item>
-                    <el-descriptions-item label="当前价格" v-if="queryResult.currentPrice">
-                      {{ queryResult.currentPrice }}
-                    </el-descriptions-item>
-                    <el-descriptions-item label="期权类型">
+                  <div class="option-info-grid">
+                    <div class="info-item">
+                      <div class="info-label">股票代码</div>
+                      <div class="info-value code-value">{{ queryResult.stockCode }}</div>
+                    </div>
+                    <div class="info-item">
+                      <div class="info-label">股票名称</div>
+                      <div class="info-value name-value">{{ queryResult.stockName }}</div>
+                    </div>
+                    <div class="info-item">
+                      <div class="info-label">期权类型</div>
+                      <div class="info-value type-value">
+                        <el-tag :type="queryResult.optionType === 'call' ? 'success' : 'warning'" size="small">
                       {{ queryResult.optionType === 'call' ? '看涨期权 (Call)' : '看跌期权 (Put)' }}
-                    </el-descriptions-item>
-                    <el-descriptions-item label="行权价格">
-                      {{ queryResult.strikePrice }}
-                      <el-tag v-if="queryResult.strikePriceRatio" size="small" type="info" class="ml-2">
-                        {{ queryResult.strikePriceRatio }}%
+                        </el-tag>
+                      </div>
+                    </div>
+                    <div class="info-item">
+                      <div class="info-label">行权价格</div>
+                      <div class="info-value strike-value">
+                        <el-tag type="info" size="small" class="strike-tag">
+                        {{ queryResult.strikePriceRatio ? queryResult.strikePriceRatio + 'call' : '--' }}
                       </el-tag>
-                    </el-descriptions-item>
-                    <el-descriptions-item label="到期日">{{ queryResult.expiryDate }}</el-descriptions-item>
-                    <el-descriptions-item label="期限">{{ queryResult.term }}</el-descriptions-item>
-                  </el-descriptions>
+                      </div>
+                    </div>
+                    <div class="info-item">
+                      <div class="info-label">到期日</div>
+                      <div class="info-value date-value">{{ queryResult.expiryDate }}</div>
+                    </div>
+                    <div class="info-item">
+                      <div class="info-label">期限</div>
+                      <div class="info-value term-value">
+                        <el-tag type="primary" size="small" class="term-tag">
+                          {{ getTermDisplayName(queryResult.term) }}
+                        </el-tag>
+                      </div>
+                    </div>
+                  </div>
                 </el-card>
               </el-col>
               
@@ -1996,85 +2899,31 @@ const formatQuoteTime = (timeString: string): string => {
                     </div>
                   </template>
                   
+                  <!-- 报价时间 -->
+                  <div class="quote-time-section">
+                    <div class="time-label">报价时间</div>
+                    <div class="time-value">{{ new Date(queryResult.quoteTime).toLocaleString() }}</div>
+                  </div>
+                  
+                  <!-- 报价价格 -->
                   <div class="price-section">
                     <div class="main-price">
-                      <div class="price-label">报价</div>
-                      <div class="price-value">{{ queryResult.lastPrice }}</div>
-                    </div>
-                    
-                    <div class="price-details">
-                      <div class="price-item">
-                        <div class="item-label">买入价</div>
-                        <div class="item-value">{{ queryResult.bidPrice }}</div>
-                      </div>
-                      <div class="price-item">
-                        <div class="item-label">卖出价</div>
-                        <div class="item-value">{{ queryResult.askPrice }}</div>
-                      </div>
+                      <div class="price-label">报价价格</div>
+                      <div class="price-value">{{ queryResult.impliedVolatility ? (queryResult.impliedVolatility.includes('%') ? queryResult.impliedVolatility : queryResult.impliedVolatility) : '--' }}</div>
                     </div>
                   </div>
                   
-                  <el-divider>希腊字母</el-divider>
-                  
-                  <div class="greeks-section">
-                    <div class="greek-item" v-if="queryResult.delta !== undefined">
-                      <div class="greek-name">Delta</div>
-                      <div class="greek-value">{{ queryResult.delta }}</div>
-                    </div>
-                    <div class="greek-item" v-if="queryResult.gamma !== undefined">
-                      <div class="greek-name">Gamma</div>
-                      <div class="greek-value">{{ queryResult.gamma }}</div>
-                    </div>
-                    <div class="greek-item" v-if="queryResult.theta !== undefined">
-                      <div class="greek-name">Theta</div>
-                      <div class="greek-value">{{ queryResult.theta }}</div>
-                    </div>
-                    <div class="greek-item" v-if="queryResult.vega !== undefined">
-                      <div class="greek-name">Vega</div>
-                      <div class="greek-value">{{ queryResult.vega }}</div>
-                    </div>
-                    <div class="greek-item" v-if="queryResult.impliedVolatility">
-                      <div class="greek-name">隐含波动率</div>
-                      <div class="greek-value">{{ queryResult.impliedVolatility.includes('%') ? queryResult.impliedVolatility : queryResult.impliedVolatility + '%' }}</div>
-                    </div>
-                  </div>
-                  
-                  <div class="market-data" v-if="queryResult.volume !== undefined || queryResult.openInterest !== undefined">
-                    <el-divider>市场数据</el-divider>
-                    <div class="market-item" v-if="queryResult.volume !== undefined">
-                      <div class="item-label">交易量</div>
-                      <div class="item-value">{{ queryResult.volume }}</div>
-                    </div>
-                    <div class="market-item" v-if="queryResult.openInterest !== undefined">
-                      <div class="item-label">持仓量</div>
-                      <div class="item-value">{{ queryResult.openInterest }}</div>
-                    </div>
-                    <div class="market-item" v-if="queryResult.quoteTime">
-                      <div class="item-label">报价时间</div>
-                      <div class="item-value">{{ formatQuoteTime(queryResult.quoteTime) }}</div>
-                    </div>
-                  </div>
-                  
-                  <!-- 券商报价列表 -->
-                  <div class="broker-quotes" v-if="queryResult.brokerQuotes && queryResult.brokerQuotes.length > 0">
-                    <el-divider>各机构报价</el-divider>
-                    <div class="broker-quotes-table">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>报价方</th>
-                            <th>隐含波动率</th>
-                            <th>报价</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr v-for="(quote, index) in queryResult.brokerQuotes" :key="index">
-                            <td>{{ quote.broker }}</td>
-                            <td>{{ quote.impliedVolatility }}</td>
-                            <td>{{ quote.price }}</td>
-                          </tr>
-                        </tbody>
-                      </table>
+                  <!-- 钉钉二维码 -->
+                  <div class="dingtalk-section">
+                    <div class="dingtalk-title">交易请加入钉钉群咨询客服</div>
+                    <div class="dingtalk-qr">
+                      <img 
+                        src="/钉钉二维码 (2).png" 
+                        alt="钉钉二维码" 
+                        class="qr-image clickable" 
+                        @click="showImagePreview = true"
+                        title="点击查看大图"
+                      />
                     </div>
                   </div>
                   
@@ -2157,6 +3006,22 @@ const formatQuoteTime = (timeString: string): string => {
     </div>
   </div>
 
+  <!-- 图片预览对话框 -->
+  <el-dialog
+    v-model="showImagePreview"
+    title="钉钉二维码"
+    width="400px"
+    destroy-on-close
+    center
+  >
+    <div class="image-preview-content">
+      <img src="/钉钉二维码 (2).png" alt="钉钉二维码" class="preview-image" />
+      <div class="image-description">
+        扫描二维码加入钉钉群，联系客服进行交易咨询
+      </div>
+    </div>
+  </el-dialog>
+
   <!-- 行权价格获取指南对话框 -->
   <el-dialog
     v-model="showStrikePriceGuide"
@@ -2223,6 +3088,9 @@ const formatQuoteTime = (timeString: string): string => {
       <el-button @click="showStrikePriceGuide = false">我知道了</el-button>
     </template>
   </el-dialog>
+  
+  <!-- ICP备案信息 -->
+  <IcpFooter />
 </template>
 
 <style lang="scss" scoped>
@@ -2345,45 +3213,140 @@ $put-color: #f44336;
   color: $text-color;
   
   .inquiry-container {
-    padding-top: $header-height;
+    padding-top: calc($header-height + 60px);
     min-height: calc(100vh - $header-height);
     max-width: 1200px;
     margin: 0 auto;
-    padding: 80px 20px 40px;
+    padding: 20px 20px 20px 20px;
+    display: flex;
+    flex-direction: column;
   }
   
   .inquiry-header {
     text-align: center;
-    margin-bottom: 60px;
+    margin-bottom: 25px;
+    padding-top: 40px;
+    margin-top: 20px;
+    position: relative;
+    z-index: 1;
     
     .inquiry-title {
-      font-size: 42px;
+      font-size: 36px;
       font-weight: 700;
-      margin-bottom: 16px;
-      background: linear-gradient(to right, $primary-color, $secondary-color);
-      -webkit-background-clip: text;
-      background-clip: text;
-      -webkit-text-fill-color: transparent;
+      margin-bottom: 15px;
+      color: $primary-color;
+      text-shadow: 0 2px 4px rgba(26, 41, 128, 0.1);
+      line-height: 1.2;
+      position: relative;
+      z-index: 1;
+      margin-top: 20px;
     }
     
     .inquiry-description {
-      font-size: 18px;
+      font-size: 16px;
       color: $text-secondary;
-      max-width: 600px;
+      max-width: 500px;
       margin: 0 auto;
+      line-height: 1.5;
+      font-weight: 400;
+      position: relative;
+      z-index: 1;
     }
   }
   
   .inquiry-content {
     display: grid;
-    grid-template-columns: 2fr 3fr;
-    gap: 40px;
+    grid-template-columns: 380px 1fr;
+    gap: 20px;
+    flex-grow: 1;
+    overflow: hidden;
+    
+    .section-header {
+      margin-bottom: 20px;
+      margin-top: 10px;
+      text-align: center;
+      
+      .section-title {
+        font-size: 20px;
+        font-weight: 700;
+        margin-bottom: 4px;
+        color: $primary-color;
+        background: linear-gradient(135deg, $primary-color 0%, $secondary-color 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      
+      .section-subtitle {
+        font-size: 12px;
+        color: var(--el-text-color-secondary);
+        font-weight: 400;
+      }
+    }
     
     .section-title {
       font-size: 20px;
       font-weight: 600;
       margin-bottom: 20px;
       color: $primary-color;
+    }
+      
+      .api-test-section {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 20px;
+        padding: 16px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        border: 1px solid #e9ecef;
+        
+        .api-status {
+          font-size: 14px;
+          color: var(--el-text-color-secondary);
+        }
+        
+        .data-info {
+          font-size: 12px;
+          color: var(--el-color-success);
+          background-color: #f0f9ff;
+          padding: 4px 8px;
+          border-radius: 4px;
+          margin-left: 8px;
+        }
+        
+        .data-source-info {
+          font-size: 12px;
+          color: var(--el-color-primary);
+          background-color: #ecf5ff;
+          padding: 4px 8px;
+          border-radius: 4px;
+          margin-left: 8px;
+        }
+        
+              .data-loading-status {
+        margin-bottom: 30px;
+        
+        :deep(.el-alert) {
+          border-radius: 8px;
+          
+          .el-alert__title {
+            font-weight: 600;
+          }
+          
+          .el-alert__content {
+            p {
+              margin: 4px 0 0 0;
+              font-size: 14px;
+              line-height: 1.4;
+            }
+          }
+        }
+      }
+      
+      .data-source-notice {
+        margin-bottom: 20px;
+      }
     }
     
     .divider {
@@ -2489,12 +3452,168 @@ $put-color: #f44336;
     .inquiry-form-container {
       background: #f9f9f9;
       border-radius: 12px;
-      padding: 30px;
+      padding: 16px;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      height: 100%;
+      overflow-y: auto;
+      
+      .debug-controls {
+        margin-bottom: 16px;
+        text-align: right;
+      }
+      
+      .debug-panel {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 20px;
+        
+        .debug-title {
+          color: #495057;
+          font-size: 16px;
+          font-weight: 600;
+          margin-bottom: 16px;
+          border-bottom: 2px solid #007bff;
+          padding-bottom: 8px;
+        }
+        
+        .debug-section {
+          margin-bottom: 16px;
+          
+          h4 {
+            color: #6c757d;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+          }
+          
+          pre {
+            background: #ffffff;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 8px;
+            font-size: 12px;
+            overflow-x: auto;
+            max-height: 200px;
+            overflow-y: auto;
+          }
+          
+          ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            
+            li {
+              background: #ffffff;
+              border: 1px solid #dee2e6;
+              border-radius: 4px;
+              padding: 4px 8px;
+              margin-bottom: 4px;
+              font-size: 12px;
+              font-family: monospace;
+            }
+          }
+          
+          .column-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            
+            .column-item {
+              background: #e3f2fd;
+              border: 1px solid #2196f3;
+              border-radius: 4px;
+              padding: 2px 6px;
+              font-size: 11px;
+              font-family: monospace;
+              color: #1976d2;
+            }
+          }
+          
+          .processing-info {
+            background: #ffffff;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 12px;
+            
+            p {
+              margin: 4px 0;
+              font-size: 13px;
+              
+              strong {
+                color: #495057;
+              }
+            }
+          }
+          
+          .table-container {
+            overflow-x: auto;
+            max-height: 300px;
+            overflow-y: auto;
+            
+            .debug-table {
+              width: 100%;
+              border-collapse: collapse;
+              font-size: 11px;
+              font-family: monospace;
+              
+              th, td {
+                border: 1px solid #dee2e6;
+                padding: 4px 6px;
+                text-align: left;
+                white-space: nowrap;
+              }
+              
+              th {
+                background: #f8f9fa;
+                font-weight: 600;
+                position: sticky;
+                top: 0;
+                z-index: 1;
+              }
+              
+              tr:nth-child(even) {
+                background: #f8f9fa;
+              }
+            }
+          }
+        }
+      }
       
       :deep(.el-form-item__label) {
-        font-weight: 500;
+        font-weight: 600;
+        font-size: 16px;
+        color: var(--el-color-primary);
+        margin-bottom: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
       }
+      
+              .enhanced-form-item {
+          margin-bottom: 12px;
+          
+          :deep(.el-form-item__label) {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--el-color-primary);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+          
+          &:last-child {
+            margin-bottom: 0;
+          }
+          
+          &.inquiry-form-item {
+            :deep(.el-form-item__content) {
+              display: flex;
+              justify-content: center;
+              align-items: center;
+            }
+          }
+        }
       
       .select-empty-tip {
         margin-top: 8px;
@@ -2510,11 +3629,45 @@ $put-color: #f44336;
       
       .stock-code-input-container {
         position: relative;
-        margin-bottom: 8px;
+        margin-bottom: 12px;
         
         .stock-code-input {
           width: 100%;
-          padding-right: 120px; /* 为右侧显示的股票信息留出空间 */
+          
+          &.enhanced-input {
+            :deep(.el-input__wrapper) {
+              border-radius: 8px;
+              border: 2px solid #e9ecef;
+              transition: all 0.3s ease;
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+              
+              &:hover {
+                border-color: var(--el-color-primary-light-5);
+                box-shadow: 0 4px 12px rgba(64, 158, 255, 0.1);
+              }
+              
+              &.is-focus {
+                border-color: var(--el-color-primary);
+                box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
+              }
+            }
+            
+            :deep(.el-input__prefix) {
+              color: var(--el-color-primary);
+              font-size: 16px;
+            }
+          }
+        }
+        
+        .selected-stock-name {
+          margin-top: 10px;
+          font-size: 14px;
+          color: var(--el-color-primary);
+          font-weight: 500;
+          padding: 8px 12px;
+          background-color: #ecf5ff;
+          border-radius: 6px;
+          border-left: 3px solid var(--el-color-primary);
         }
         
         .selected-stock-info {
@@ -2534,6 +3687,28 @@ $put-color: #f44336;
           pointer-events: none;
           opacity: 0.8;
           z-index: 2; /* 确保显示在输入框上方 */
+        }
+        
+        .stock-loading-status {
+          margin-top: 8px;
+          font-size: 12px;
+          color: var(--el-color-primary);
+          background-color: #ecf5ff;
+          padding: 6px 10px;
+          border-radius: 4px;
+          text-align: center;
+          border: 1px solid rgba(64, 158, 255, 0.2);
+        }
+        
+        .stock-count-hint {
+          margin-top: 8px;
+          font-size: 12px;
+          color: var(--el-color-success);
+          background-color: #f0f9ff;
+          padding: 6px 10px;
+          border-radius: 4px;
+          text-align: center;
+          border: 1px solid rgba(103, 194, 58, 0.2);
         }
         
         .stock-search-results {
@@ -2599,49 +3774,222 @@ $put-color: #f44336;
       margin-top: 20px;
       
       .result-card {
-        margin-bottom: 20px;
+          margin-bottom: 10px;
+          border-radius: 10px;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+          border: 1px solid #e9ecef;
+          height: fit-content;
+          width: 100%;
+          box-sizing: border-box;
         
         .card-header {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          font-weight: bold;
+              padding: 10px 12px;
+              background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+              border-bottom: 1px solid #dee2e6;
+              border-radius: 10px 10px 0 0;
+              border-left: 1px solid #e9ecef;
+              border-right: 1px solid #e9ecef;
+              border-top: 1px solid #e9ecef;
+            
+            .header-title {
+              font-weight: 600;
+              font-size: 14px;
+              color: var(--el-color-primary);
+            }
+            
+            .header-tag {
+              border-radius: 20px;
+              font-weight: 500;
+            }
+          }
+          
+          &.option-info-card {
+            .option-info-grid {
+              display: grid;
+              grid-template-columns: repeat(2, 1fr);
+              gap: 10px;
+              padding: 10px;
+              
+                              .info-item {
+                  display: flex;
+                  flex-direction: column;
+                  gap: 3px;
+                  padding: 8px;
+                  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+                  border-radius: 6px;
+                  border: 1px solid #d1d5db;
+                  transition: all 0.3s ease;
+                
+                &:hover {
+                  transform: translateY(-2px);
+                  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+                  border-color: var(--el-color-primary);
+                  border-width: 2px;
+                }
+                
+                .info-label {
+                  font-size: 11px;
+                  color: var(--el-text-color-secondary);
+                  font-weight: 500;
+                  text-transform: uppercase;
+                  letter-spacing: 0.3px;
+                }
+                
+                .info-value {
+                  font-size: 13px;
+                  font-weight: 600;
+                  color: var(--el-text-color-primary);
+                  
+                  &.code-value {
+                    font-family: 'Courier New', monospace;
+                    color: var(--el-color-primary);
+                    background: rgba(64, 158, 255, 0.1);
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    border: 1px solid rgba(64, 158, 255, 0.2);
+                  }
+                  
+                  &.name-value {
+                    color: var(--el-color-success);
+                    font-weight: 700;
+                  }
+                  
+                  &.type-value {
+                    .el-tag {
+                      border-radius: 20px;
+                      font-weight: 600;
+                    }
+                  }
+                  
+                  &.strike-value {
+                    .strike-tag {
+                      border-radius: 20px;
+                      font-weight: 600;
+                      background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+                      border: none;
+                      color: white;
+                    }
+                  }
+                  
+                  &.date-value {
+                    font-family: 'Courier New', monospace;
+                    color: var(--el-color-warning);
+                    background: rgba(230, 162, 60, 0.1);
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    border: 1px solid rgba(230, 162, 60, 0.2);
+                  }
+                  
+                  &.term-value {
+                    .term-tag {
+                      border-radius: 20px;
+                      font-weight: 600;
+                      background: linear-gradient(135deg, #409eff 0%, #337ecc 100%);
+                      border: none;
+                      color: white;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        
+        .quote-time-section {
+          text-align: center;
+          margin-bottom: 12px;
+          padding: 10px;
+          background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+          border-radius: 10px;
+          border: 1px solid #d1d5db;
+          
+          .time-label {
+            font-size: 12px;
+            color: var(--el-text-color-secondary);
+            margin-bottom: 6px;
+            font-weight: 500;
+          }
+          
+          .time-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--el-color-primary);
+            font-family: 'Courier New', monospace;
+          }
         }
         
         .price-section {
-          padding: 16px 0;
+          padding: 12px;
+          margin-bottom: 12px;
+          background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
+          border-radius: 10px;
+          border: 1px solid #feb2b2;
           
           .main-price {
             text-align: center;
-            margin-bottom: 20px;
             
             .price-label {
               font-size: 16px;
               color: var(--el-text-color-secondary);
+              margin-bottom: 10px;
+              font-weight: 500;
+              text-transform: uppercase;
+              letter-spacing: 0.8px;
             }
             
             .price-value {
               font-size: 32px;
-              font-weight: bold;
+              font-weight: 800;
               color: var(--el-color-danger);
+              text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+              background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+              -webkit-background-clip: text;
+              background-clip: text;
+              -webkit-text-fill-color: transparent;
+              padding: 4px 0;
             }
           }
-          
-          .price-details {
-            display: flex;
-            justify-content: space-around;
-            
-            .price-item {
+        }
+        
+                .dingtalk-section {
               text-align: center;
+          padding: 16px;
+          background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+          border-radius: 10px;
+          border: 1px solid #2196f3;
+          margin-top: 12px;
               
-              .item-label {
+          .dingtalk-title {
                 font-size: 14px;
-                color: var(--el-text-color-secondary);
+            color: var(--el-color-primary);
+            margin-bottom: 16px;
+            font-weight: 600;
+          }
+          
+          .dingtalk-qr {
+            .qr-image {
+              width: 120px;
+              height: 120px;
+              border-radius: 8px;
+              border: 3px solid #fff;
+              box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+              transition: transform 0.3s ease;
+              cursor: pointer;
+              
+              &:hover {
+                transform: scale(1.1);
+                box-shadow: 0 8px 25px rgba(33, 150, 243, 0.6);
               }
               
-              .item-value {
-                font-size: 18px;
-                font-weight: bold;
+              &.clickable {
+                cursor: pointer;
+                
+                &:hover {
+                  transform: scale(1.1);
+                  box-shadow: 0 10px 30px rgba(33, 150, 243, 0.7);
+                }
               }
             }
           }
@@ -2675,6 +4023,44 @@ $put-color: #f44336;
           gap: 16px;
           margin-top: 20px;
         }
+        
+        .inquiry-button-container {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          margin-top: 15px;
+          width: 100%;
+          text-align: center;
+        }
+        
+        .inquiry-button {
+          width: 200px;
+          height: 44px;
+          font-size: 16px;
+          font-weight: 600;
+          border-radius: 12px;
+          background: linear-gradient(135deg, var(--el-color-primary) 0%, #337ecc 100%);
+          border: none;
+          box-shadow: 0 4px 15px rgba(64, 158, 255, 0.3);
+          transition: all 0.3s ease;
+          margin: 0 auto;
+          
+          &:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(64, 158, 255, 0.4);
+            background: linear-gradient(135deg, #337ecc 0%, var(--el-color-primary) 100%);
+          }
+          
+          &:active {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(64, 158, 255, 0.3);
+          }
+          
+          i {
+            margin-right: 8px;
+            font-size: 20px;
+          }
+        }
       }
       
       .method-card {
@@ -2687,14 +4073,36 @@ $put-color: #f44336;
     }
   }
   
+  @media (max-width: 1200px) {
+    .inquiry-container {
+      max-width: 100%;
+      padding: 15px;
+    }
+    
+    .inquiry-content {
+      grid-template-columns: 350px 1fr;
+      gap: 15px;
+    }
+  }
+  
   @media (max-width: 992px) {
     .inquiry-content {
       grid-template-columns: 1fr;
+      gap: 15px;
+    }
+    
+    .option-info-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      padding: 8px;
     }
   }
   
   .inquiry-result-container {
-    min-height: 400px;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 300px;
     
     .empty-result {
       height: 100%;
@@ -2703,80 +4111,37 @@ $put-color: #f44336;
       justify-content: center;
       background-color: #f9f9f9;
       border-radius: 12px;
-      padding: 30px;
+      padding: 20px;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
       
       .empty-result-content {
         text-align: center;
         
         i {
-          font-size: 48px;
+          font-size: 36px;
           color: var(--el-color-primary-light-5);
-          margin-bottom: 20px;
+          margin-bottom: 15px;
         }
         
         h3 {
-          font-size: 20px;
+          font-size: 18px;
           font-weight: 600;
           color: var(--el-color-primary);
-          margin-bottom: 10px;
+          margin-bottom: 8px;
         }
         
         p {
           color: var(--el-text-color-secondary);
-          max-width: 300px;
+          max-width: 250px;
           margin: 0 auto;
+          font-size: 14px;
         }
       }
     }
     
     .result-section {
       .mt-4 {
-        margin-top: 16px;
-      }
-    }
-    
-    .broker-quotes {
-      margin-top: 20px;
-      
-      .broker-quotes-table {
-        margin-top: 15px;
-        
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          
-          th, td {
-            padding: 10px;
-            text-align: center;
-            border-bottom: 1px solid #ebeef5;
-          }
-          
-          th {
-            font-weight: 600;
-            color: var(--el-text-color-primary);
-            background-color: #f5f7fa;
-          }
-          
-          tr:hover {
-            background-color: #f5f7fa;
-          }
-          
-          td:first-child {
-            font-weight: 500;
-            color: var(--el-color-primary);
-          }
-          
-          td:nth-child(2) {
-            color: #e6a23c;
-            font-weight: 500;
-          }
-          
-          td:last-child {
-            font-weight: 600;
-            color: #409eff;
-          }
-        }
+        margin-top: 12px;
       }
     }
   }
@@ -2784,8 +4149,48 @@ $put-color: #f44336;
   @media (max-width: 768px) {
     .inquiry-header {
       .inquiry-title {
-        font-size: 32px;
+        font-size: 26px;
       }
+      
+      .inquiry-description {
+        font-size: 13px;
+      }
+    }
+    
+    .inquiry-container {
+      padding: 15px;
+      padding-top: calc($header-height + 40px);
+    }
+    
+    .inquiry-content {
+      height: calc(100vh - 240px);
+    }
+    
+    .inquiry-button {
+      width: 180px !important;
+    }
+    
+    .inquiry-form-container {
+      padding: 15px;
+    }
+    
+    .option-info-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+      padding: 6px;
+    }
+    
+    .price-value {
+      font-size: 28px !important;
+    }
+    
+    .dingtalk-qr .qr-image {
+      width: 100px !important;
+      height: 100px !important;
+    }
+    
+    .inquiry-button {
+      width: 160px !important;
     }
   }
 }
@@ -3003,6 +4408,32 @@ $put-color: #f44336;
   }
 }
 
+// 图片预览样式
+.image-preview-content {
+  text-align: center;
+  padding: 20px;
+  
+  .preview-image {
+    width: 100%;
+    max-width: 300px;
+    height: auto;
+    border-radius: 8px;
+    border: 2px solid #e9ecef;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    margin-bottom: 16px;
+  }
+  
+  .image-description {
+    font-size: 14px;
+    color: var(--el-text-color-secondary);
+    line-height: 1.5;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border: 1px solid #e9ecef;
+  }
+}
+
 .inquiry-info {
   h2 {
     font-size: 24px;
@@ -3079,18 +4510,102 @@ $put-color: #f44336;
 }
 
 .term-options {
-  .el-radio-group {
+          .enhanced-radio-group {
     width: 100%;
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+      gap: 6px;
     
-    .el-radio-button {
-      margin-bottom: 8px;
+      .term-radio {
+        margin-bottom: 6px;
       
       :deep(.el-radio-button__inner) {
-        padding: 8px 15px;
-        border-radius: 4px;
+          padding: 6px 12px;
+          border-radius: 6px;
+          font-weight: 600;
+          font-size: 12px;
+          border: 2px solid #e9ecef;
+          transition: all 0.3s ease;
+          background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+        
+        &:hover {
+          border-color: var(--el-color-primary-light-5);
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(64, 158, 255, 0.15);
+        }
+      }
+      
+      :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+        background: linear-gradient(135deg, var(--el-color-primary) 0%, #337ecc 100%);
+        border-color: var(--el-color-primary);
+        color: white;
+        box-shadow: 0 4px 15px rgba(64, 158, 255, 0.3);
+        transform: translateY(-2px);
+      }
+    }
+  }
+}
+
+.structure-options {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  
+  &.enhanced-structure {
+    .structure-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px;
+      background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+      border-radius: 10px;
+      border: 1px solid #e9ecef;
+      transition: all 0.3s ease;
+      
+      &:hover {
+        border-color: var(--el-color-primary-light-5);
+        box-shadow: 0 4px 15px rgba(64, 158, 255, 0.1);
+      }
+      
+      .structure-label {
+        min-width: 60px;
+        font-size: 15px;
+        color: var(--el-color-primary);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      
+              .structure-tags {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          
+          .structure-tag {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-weight: 500;
+            border: 2px solid #e9ecef;
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+          
+          &:hover {
+            background: linear-gradient(135deg, #ecf5ff 0%, #d9ecff 100%);
+            border-color: var(--el-color-primary-light-5);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(64, 158, 255, 0.15);
+          }
+          
+          &.active {
+            background: linear-gradient(135deg, var(--el-color-primary) 0%, #337ecc 100%);
+            color: white;
+            border-color: var(--el-color-primary);
+            box-shadow: 0 4px 15px rgba(64, 158, 255, 0.3);
+            transform: translateY(-2px);
+          }
+        }
       }
     }
   }

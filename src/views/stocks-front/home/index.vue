@@ -126,7 +126,7 @@ onMounted(() => {
       
       <div class="feature-cards">
         <el-row :gutter="20">
-          <el-col :xs="24" :sm="12" :md="8">
+          <el-col :xs="24" :sm="12" :md="12">
             <el-card shadow="hover" class="feature-card" @click="router.push('/stocks-front/inquiry')">
               <div class="card-content">
                 <div class="card-icon">
@@ -140,7 +140,7 @@ onMounted(() => {
             </el-card>
           </el-col>
           
-          <el-col :xs="24" :sm="12" :md="8">
+          <el-col :xs="24" :sm="12" :md="12">
             <el-card shadow="hover" class="feature-card" @click="router.push('/stocks-front/video')">
               <div class="card-content">
                 <div class="card-icon">
@@ -170,7 +170,8 @@ onMounted(() => {
     
     <footer class="site-footer">
       <div class="footer-content">
-        <div class="copyright">© 2025 NineTube 股票教育平台 版权所有 | 专业投资教育 · 智慧理财之选</div>
+        <div class="copyright">© 2025 Gthtsec股票教育平台 版权所有 | 专业投资教育 · 智慧理财之选</div>
+        <IcpFooter />
       </div>
     </footer>
   </div>
@@ -622,13 +623,27 @@ $header-height: 70px;
 
     .footer-content {
       display: flex;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
+      gap: 20px;
 
       .copyright {
         color: rgba(255, 255, 255, 0.8);
         font-size: 16px;
         text-align: center;
+      }
+      
+      .icp-footer {
+        border-top: none;
+        
+        .icp-link {
+          color: rgba(255, 255, 255, 0.6);
+          
+          &:hover {
+            color: rgba(255, 255, 255, 0.9);
+          }
+        }
       }
     }
   }

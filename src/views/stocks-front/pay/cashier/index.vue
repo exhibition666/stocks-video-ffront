@@ -54,6 +54,9 @@
         </div>
       </el-card>
     </div>
+    
+    <!-- ICP备案信息 -->
+    <IcpFooter />
   </div>
 </template>
 

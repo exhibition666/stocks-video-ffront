@@ -225,6 +225,9 @@
         </span>
       </template>
     </el-dialog>
+    
+    <!-- ICP备案信息 -->
+    <IcpFooter />
   </div>
 </template>
 

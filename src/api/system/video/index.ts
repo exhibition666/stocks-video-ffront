@@ -12,6 +12,9 @@ export interface Video {
   typeId?: number; // 视频分类id
   previewLimit?: number; // 试看时长（秒）
   isVipOnly?: boolean | number; // 是否仅VIP可观看（1=是，0=否）
+  // 新增：观看邀请码（兼容不同后端字段命名）
+  watchCode?: string; // 观看邀请码（推荐后端驼峰）
+  watchcode?: string; // 观看邀请码（兼容后端小写）
   status?: number; // 状态（1=上架，0=下架）
   view?: number; // 观看数
   creator?: string; // 创建者

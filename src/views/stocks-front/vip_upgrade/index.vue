@@ -109,6 +109,9 @@
         </div>
       </div>
     </div>
+    
+    <!-- ICP备案信息 -->
+    <IcpFooter />
   </div>
 </template>
 

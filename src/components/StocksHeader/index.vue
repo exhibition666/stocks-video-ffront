@@ -60,7 +60,7 @@ const goToVipUpgrade = () => {
   <div :class="prefixCls">
     <div :class="`${prefixCls}-left`">
       <div class="logo-container" @click="goToHome">
-        <span class="title">股票期权系统</span>
+        <span class="title">Gthtsec</span>
       </div>
       
       <div class="nav-links">
@@ -73,9 +73,9 @@ const goToVipUpgrade = () => {
         <router-link to="/stocks-front/video" class="nav-item" active-class="active">
           <span>视频教学</span>
         </router-link>
-        <router-link v-if="isUserLoggedIn" to="/stocks-front/vip_upgrade" class="nav-item" active-class="active">
+        <!--<router-link v-if="isUserLoggedIn" to="/stocks-front/vip_upgrade" class="nav-item" active-class="active">
           <span>购买VIP</span>
-        </router-link>
+        </router-link>-->
       </div>
     </div>
     

@@ -28,12 +28,14 @@ export const OptionInquiryApi = {
   }
 }
 
+
+
 // 期权询价参数接口
 export interface OptionInquiryParams {
   stockCode: string          // 股票代码
   optionType: 'call' | 'put' // 期权类型：看涨/看跌
   term: string               // 期限：1M, 2M, 3M, 6M, 12M
-  structureType: string      // 结构类型：atm(平值), itm(实值), otm(虚值), custom(自定义)
+  structureType: string      // 结构类型：atm(平值), itm(实值), otm(虚值), discount(折价), custom(自定义)
   strikePriceRatio?: number  // 行权价格比例
   strikePrice?: number       // 自定义行权价格
   expiryDate?: string        // 到期日
@@ -96,6 +98,9 @@ export const extractOptionInquiryFromExcel = (
       } else if (inquiryParams.structureType === 'otm') {
         // 虚值看涨期权
         return extractCallOptionFromExcel(stockOptionsData, inquiryParams, 'otm')
+      } else if (inquiryParams.structureType === 'discount') {
+        // 折价看涨期权
+        return extractCallOptionFromExcel(stockOptionsData, inquiryParams, 'discount')
       } else {
         // 自定义看涨期权
         return extractCustomCallOptionFromExcel(stockOptionsData, inquiryParams)
@@ -111,6 +116,9 @@ export const extractOptionInquiryFromExcel = (
       } else if (inquiryParams.structureType === 'otm') {
         // 虚值看跌期权
         return extractPutOptionFromExcel(stockOptionsData, inquiryParams, 'otm')
+      } else if (inquiryParams.structureType === 'discount') {
+        // 折价看跌期权
+        return extractPutOptionFromExcel(stockOptionsData, inquiryParams, 'discount')
       } else {
         // 自定义看跌期权
         return extractCustomPutOptionFromExcel(stockOptionsData, inquiryParams)
@@ -126,7 +134,7 @@ export const extractOptionInquiryFromExcel = (
 function extractCallOptionFromExcel(
   excelData: any,
   params: OptionInquiryParams,
-  structureType: 'atm' | 'itm' | 'otm'
+  structureType: 'atm' | 'itm' | 'otm' | 'discount'
 ): OptionInquiryResult | null {
   // 查找股票信息
   const stockInfo = findStockInfo(excelData, params.stockCode)
@@ -172,7 +180,7 @@ function extractCallOptionFromExcel(
 function extractPutOptionFromExcel(
   excelData: any,
   params: OptionInquiryParams,
-  structureType: 'atm' | 'itm' | 'otm'
+  structureType: 'atm' | 'itm' | 'otm' | 'discount'
 ): OptionInquiryResult | null {
   // 查找股票信息
   const stockInfo = findStockInfo(excelData, params.stockCode)
@@ -310,7 +318,7 @@ function extractCustomPutOptionFromExcel(
 function extractOptionPrices(
   excelData: any,
   params: OptionInquiryParams,
-  structureType: 'atm' | 'itm' | 'otm',
+  structureType: 'atm' | 'itm' | 'otm' | 'discount',
   optionType: 'call' | 'put' = 'call'
 ): BrokerQuote[] {
   const brokers = [
@@ -380,6 +388,50 @@ function extractOptionPrices(
                 break
               }
             }
+          } else if (structureType === 'discount') {
+            // 折价看涨，查找类似 "1m( 8080 )" 或 "1m( 9090 )" 或 "1m( 9070 )" 的列
+            // 需要根据实际选择的比例进行精确匹配
+            const selectedRatio = params.strikePriceRatio?.toString() || '8080'
+            
+            // 辅助函数：检查列名是否包含指定比例（兼容半角和全角括号）
+            const containsRatio = (colName: string, targetRatio: string) => {
+              // 标准化列名，将全角括号转换为半角括号
+              const normalizedColName = colName
+                .replace(/（/g, '(')  // 全角左括号转半角
+                .replace(/）/g, ')')  // 全角右括号转半角
+              return normalizedColName.includes('(' + targetRatio + ')')
+            }
+            
+            for (const key in row) {
+              if (key.includes(params.term.replace('M', 'm')) && containsRatio(key, selectedRatio)) {
+                columnName = key
+                break
+              }
+            }
+            
+            // 如果没找到精确匹配，尝试匹配任意折价比例
+            if (!columnName) {
+              for (const key in row) {
+                if (key.includes(params.term.replace('M', 'm')) && 
+                    (containsRatio(key, '8080') || containsRatio(key, '9090') || containsRatio(key, '9070'))) {
+                  columnName = key
+                  break
+                }
+              }
+            }
+            
+            // 调试信息：显示所有包含期限的列名
+            if (!columnName) {
+              console.log('折价类型看涨期权匹配失败，显示调试信息:')
+              const termColumns = Object.keys(row).filter(key => key.includes(params.term.replace('M', 'm')))
+              console.log(`包含期限 ${params.term.replace('M', 'm')} 的列名:`, termColumns)
+              
+              const bracketColumns = Object.keys(row).filter(key => key.includes('(') || key.includes('（'))
+              console.log('包含括号的列名:', bracketColumns)
+              
+              // 显示所有列名
+              console.log('所有列名:', Object.keys(row))
+            }
           }
         } else { // 看跌期权
           if (structureType === 'atm') {
@@ -407,6 +459,50 @@ function extractOptionPrices(
                 columnName = key
                 break
               }
+            }
+          } else if (structureType === 'discount') {
+            // 折价看跌，查找类似 "1m( 8080 )" 或 "1m( 9090 )" 或 "1m( 9070 )" 的列
+            // 注意：看跌期权通常没有直接的表格数据，这里只是为了保持逻辑完整性，实际可能通过计算得出
+            const selectedRatio = params.strikePriceRatio?.toString() || '8080'
+            
+            // 辅助函数：检查列名是否包含指定比例（兼容半角和全角括号）
+            const containsRatio = (colName: string, targetRatio: string) => {
+              // 标准化列名，将全角括号转换为半角括号
+              const normalizedColName = colName
+                .replace(/（/g, '(')  // 全角左括号转半角
+                .replace(/）/g, ')')  // 全角右括号转半角
+              return normalizedColName.includes('(' + targetRatio + ')')
+            }
+            
+            for (const key in row) {
+              if (key.includes(params.term.replace('M', 'm')) && containsRatio(key, selectedRatio)) {
+                columnName = key
+                break
+              }
+            }
+            
+            // 如果没找到精确匹配，尝试匹配任意折价比例
+            if (!columnName) {
+              for (const key in row) {
+                if (key.includes(params.term.replace('M', 'm')) && 
+                    (containsRatio(key, '8080') || containsRatio(key, '9090') || containsRatio(key, '9070'))) {
+                  columnName = key
+                  break
+                }
+              }
+            }
+            
+            // 调试信息：显示所有包含期限的列名
+            if (!columnName) {
+              console.log('折价类型看跌期权匹配失败，显示调试信息:')
+              const termColumns = Object.keys(row).filter(key => key.includes(params.term.replace('M', 'm')))
+              console.log(`包含期限 ${params.term.replace('M', 'm')} 的列名:`, termColumns)
+              
+              const bracketColumns = Object.keys(row).filter(key => key.includes('(') || key.includes('（'))
+              console.log('包含括号的列名:', bracketColumns)
+              
+              // 显示所有列名
+              console.log('所有列名:', Object.keys(row))
             }
           }
         }
@@ -438,7 +534,9 @@ function extractOptionPrices(
               
               // 生成隐含波动率 - 基于行权价格比例和期限
               const baseIV = 4.0 + (index % 3) // 基础波动率在4-6之间
-              const iv = baseIV * ivBaseFactor * termIvFactor * (0.9 + (combinedSeed % 100) / 500)
+                              const ivRandomFactor = 0.9 + (combinedSeed % 100) / 500 // 0.9-1.1之间的随机因子
+                const iv = baseIV * ivBaseFactor * termIvFactor * ivRandomFactor
+                // 移除上限限制，允许iv超过15%
               
               quotes.push({
                 broker: broker.code,
@@ -470,12 +568,13 @@ function extractOptionPrices(
 }
 
 // 获取结构标识符
-function getStructureIdentifier(structureType: 'atm' | 'itm' | 'otm', optionType: 'call' | 'put'): string {
+function getStructureIdentifier(structureType: 'atm' | 'itm' | 'otm' | 'discount', optionType: 'call' | 'put'): string {
   if (optionType === 'call') {
     switch (structureType) {
       case 'atm': return '100call'
       case 'itm': return '90call'
       case 'otm': return '110call'
+      case 'discount': return '8080'
       default: return '100call'
     }
   } else {
@@ -483,6 +582,7 @@ function getStructureIdentifier(structureType: 'atm' | 'itm' | 'otm', optionType
       case 'atm': return '100put'
       case 'itm': return '110put'
       case 'otm': return '90put'
+      case 'discount': return '8080'
       default: return '100put'
     }
   }
@@ -492,7 +592,7 @@ function getStructureIdentifier(structureType: 'atm' | 'itm' | 'otm', optionType
 function generateMockOptionResult(
   params: OptionInquiryParams,
   stockInfo: { name: string, price: number },
-  structureType: 'atm' | 'itm' | 'otm',
+  structureType: 'atm' | 'itm' | 'otm' | 'discount',
   optionType: 'call' | 'put' = 'call'
 ): OptionInquiryResult {
   // 计算行权价格
@@ -538,7 +638,7 @@ function generateMockBrokerQuotes(
   currentPrice: number,
   strikePrice: number = 0,
   optionType: 'call' | 'put' = 'call',
-  structureType?: 'atm' | 'itm' | 'otm'
+  structureType?: 'atm' | 'itm' | 'otm' | 'discount'
 ): BrokerQuote[] {
   const brokers = [
     { code: 'YAQZ', name: 'YAQZ', color: '#E74C3C', baseIv: 4.31 },
@@ -614,6 +714,7 @@ function generateMockBrokerQuotes(
     const ivBase = broker.baseIv
     const ivRandomFactor = 0.9 + (combinedSeed % 100) / 500 // 0.9-1.1之间的随机因子
     const iv = ivBase * termFactorForIV * ivSkewFactor * ivRandomFactor
+    // 移除上限限制，允许iv超过15%
     
     // 根据期权类型和行权价格比例确定最终价格
     const finalPrice = (optionType === 'call' && priceRatio < 80) || (optionType === 'put' && priceRatio > 120) 
@@ -763,24 +864,17 @@ function calculateVega(term: string, priceRatio: number = 100): number {
 
 // 查找股票信息
 function findStockInfo(excelData: any, stockCode: string): { name: string, price: number } | null {
-  // 从7095工作表中查找股票信息
-  if (excelData && excelData['7095']) {
-    const sheet7095 = excelData['7095']
-    for (const row of sheet7095) {
-      if (row['代码'] === stockCode || row['证券代码'] === stockCode) {
-        return {
-          name: row['标的'] || row['证券简称'] || '未知',
-          price: extractStockPrice(row) || generateRandomPrice(stockCode)
-        }
-      }
-    }
-  }
-  
-  // 从香草看涨报价工作表中查找股票信息
+  // 先查香草看涨报价工作表
   if (excelData && excelData['香草看涨报价']) {
     const sheetVanilla = excelData['香草看涨报价']
     for (const row of sheetVanilla) {
       if (row['证券代码'] === stockCode) {
+        // 打印sheet名、行数据、字段名和值
+        console.log('[定价用到的sheet]', '香草看涨报价')
+        console.log('[定价用到的行]', row)
+        Object.keys(row).forEach(key => {
+          console.log(`[字段] ${key}:`, row[key])
+        })
         return {
           name: row['证券简称'] || '未知',
           price: extractStockPrice(row) || generateRandomPrice(stockCode)
@@ -788,8 +882,26 @@ function findStockInfo(excelData: any, stockCode: string): { name: string, price
       }
     }
   }
-  
+  // 再查7095工作表
+  if (excelData && excelData['7095']) {
+    const sheet7095 = excelData['7095']
+    for (const row of sheet7095) {
+      if (row['代码'] === stockCode || row['证券代码'] === stockCode) {
+        // 打印sheet名、行数据、字段名和值
+        console.log('[定价用到的sheet]', '7095')
+        console.log('[定价用到的行]', row)
+        Object.keys(row).forEach(key => {
+          console.log(`[字段] ${key}:`, row[key])
+        })
+        return {
+          name: row['标的'] || row['证券简称'] || '未知',
+          price: extractStockPrice(row) || generateRandomPrice(stockCode)
+        }
+      }
+    }
+  }
   // 如果在Excel中找不到，生成模拟数据
+  console.log('[定价用到的sheet]', '模拟数据')
   return {
     name: `股票${stockCode}`,
     price: generateRandomPrice(stockCode)
@@ -816,17 +928,24 @@ function generateRandomPrice(stockCode: string): number {
 }
 
 // 计算行权价格
-function calculateStrikePrice(currentPrice: number, params: OptionInquiryParams, structureType: 'atm' | 'itm' | 'otm'): number {
-  const ratio = getStrikePriceRatio(structureType) / 100
+function calculateStrikePrice(currentPrice: number, params: OptionInquiryParams, structureType: 'atm' | 'itm' | 'otm' | 'discount'): number {
+  let ratio: number
+  if (structureType === 'discount' && params.strikePriceRatio) {
+    // 折价类型使用实际选择的比例
+    ratio = parseFloat(params.strikePriceRatio.toString()) / 100
+  } else {
+    ratio = getStrikePriceRatio(structureType) / 100
+  }
   return parseFloat((currentPrice * ratio).toFixed(2))
 }
 
 // 获取行权价格比例
-function getStrikePriceRatio(structureType: 'atm' | 'itm' | 'otm'): number {
+function getStrikePriceRatio(structureType: 'atm' | 'itm' | 'otm' | 'discount'): number {
   switch (structureType) {
     case 'atm': return 100 // 平值
     case 'itm': return 90  // 实值看涨期权，行权价低于当前价
     case 'otm': return 110 // 虚值看涨期权，行权价高于当前价
+    case 'discount': return 80.8 // 折价期权，行权价低于当前价（对应8080，实际使用时需要根据具体选择的值）
     default: return 100
   }
 }
@@ -865,60 +984,56 @@ function calculateExpiryDate(term: string): string {
   return `${year}-${month}-${day}`
 }
 
+// Black-Scholes公式实现
+function blackScholesPrice(S: number, K: number, T: number, r: number, sigma: number, optionType: 'call' | 'put') {
+  // S: 标的现价, K: 行权价, T: 剩余年化期限, r: 无风险利率, sigma: 波动率
+  const d1 = (Math.log(S / K) + (r + 0.5 * sigma * sigma) * T) / (sigma * Math.sqrt(T))
+  const d2 = d1 - sigma * Math.sqrt(T)
+  function normCdf(x: number) {
+    // 标准正态分布累积分布函数
+    return 0.5 * (1 + erf(x / Math.sqrt(2)))
+  }
+  function erf(x: number) {
+    // 误差函数近似
+    const sign = x >= 0 ? 1 : -1
+    x = Math.abs(x)
+    const a1 =  0.254829592
+    const a2 = -0.284496736
+    const a3 =  1.421413741
+    const a4 = -1.453152027
+    const a5 =  1.061405429
+    const p  =  0.3275911
+    const t = 1.0 / (1.0 + p * x)
+    const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x)
+    return sign * y
+  }
+  if (optionType === 'call') {
+    return S * normCdf(d1) - K * Math.exp(-r * T) * normCdf(d2)
+  } else {
+    return K * Math.exp(-r * T) * normCdf(-d2) - S * normCdf(-d1)
+  }
+}
+
 // 生成期权价格
-function generateOptionPrice(params: OptionInquiryParams, structureType: 'atm' | 'itm' | 'otm'): number {
-  // 使用股票代码作为随机种子
-  const seed = params.stockCode.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
-  
-  // 基础价格
-  let basePrice = 0
-  
-  // 根据期限调整价格
-  const termFactor = getTermFactor(params.term)
-  
-  // 根据结构类型调整价格
-  const structureFactor = getStructureFactor(structureType, params.optionType)
-  
-  // 计算价格
-  basePrice = (seed % 10) / 100 // 0.01-0.09
-  basePrice = basePrice * termFactor * structureFactor
-  
-  return parseFloat(basePrice.toFixed(4))
+function generateOptionPrice(params: OptionInquiryParams, structureType: 'atm' | 'itm' | 'otm' | 'discount'): number {
+  // 获取现价
+  const stockInfo = findStockInfo(undefined, params.stockCode)
+  const S = stockInfo?.price || 100 // 标的现价
+  const K = params.strikePrice || S * (params.strikePriceRatio || 100) / 100 // 行权价
+  const T = getTermFactor(params.term) // 剩余期限(年)
+  const r = 0.015 // 假设无风险利率1.5%
+  const sigma = 0.25 // 假设年化波动率25%，可根据实际或IV调整
+  return blackScholesPrice(S, K, T, r, sigma, params.optionType)
 }
 
 // 生成自定义期权价格
 function generateCustomOptionPrice(params: OptionInquiryParams, currentPrice: number, strikePrice: number): number {
-  // 使用股票代码作为随机种子
-  const seed = params.stockCode.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
-  
-  // 基础价格
-  let basePrice = 0
-  
-  // 根据期限调整价格
-  const termFactor = getTermFactor(params.term)
-  
-  // 计算价格比例
-  const priceRatio = strikePrice / currentPrice
-  
-  // 根据价格比例调整因子
-  let priceFactor = 1
-  if (params.optionType === 'call') {
-    if (priceRatio < 0.9) priceFactor = 1.5 // 深度实值
-    else if (priceRatio < 1) priceFactor = 1.2 // 实值
-    else if (priceRatio > 1.1) priceFactor = 0.7 // 虚值
-    else priceFactor = 1 // 接近平值
-  } else {
-    if (priceRatio > 1.1) priceFactor = 1.5 // 深度实值
-    else if (priceRatio > 1) priceFactor = 1.2 // 实值
-    else if (priceRatio < 0.9) priceFactor = 0.7 // 虚值
-    else priceFactor = 1 // 接近平值
-  }
-  
-  // 计算价格
-  basePrice = (seed % 10) / 100 // 0.01-0.09
-  basePrice = basePrice * termFactor * priceFactor
-  
-  return parseFloat(basePrice.toFixed(4))
+  const S = currentPrice
+  const K = strikePrice
+  const T = getTermFactor(params.term)
+  const r = 0.015
+  const sigma = 0.25
+  return blackScholesPrice(S, K, T, r, sigma, params.optionType)
 }
 
 // 获取期限因子
@@ -935,12 +1050,13 @@ function getTermFactor(term: string): number {
 }
 
 // 获取结构因子
-function getStructureFactor(structureType: 'atm' | 'itm' | 'otm', optionType: 'call' | 'put'): number {
+function getStructureFactor(structureType: 'atm' | 'itm' | 'otm' | 'discount', optionType: 'call' | 'put'): number {
   if (optionType === 'call') {
     switch (structureType) {
       case 'atm': return 1
       case 'itm': return 1.5
       case 'otm': return 0.7
+      case 'discount': return 1.8
       default: return 1
     }
   } else {
@@ -948,6 +1064,7 @@ function getStructureFactor(structureType: 'atm' | 'itm' | 'otm', optionType: 'c
       case 'atm': return 1
       case 'itm': return 1.5
       case 'otm': return 0.7
+      case 'discount': return 1.8
       default: return 1
     }
   }
@@ -1001,4 +1118,36 @@ function calculatePriceFactor(priceRatio: number, optionType: 'call' | 'put'): n
     else if (priceRatio < 115) return 1.4;// 实值
     else return 1.8;                      // 深度实值
   }
+} 
+
+/**
+ * 获取股票列表（简化版）
+ * @returns 股票列表数据
+ */
+export const getStockListSimple = async () => {
+  return  await request.get({
+    url: '/finance/app/excel-daily/list-simple',
+    method: 'GET',
+    header: { 'tenant-id': '1' },
+    custom: { auth: false, showError: true, showLoading: false }
+  })
+}
+
+/**
+ * 根据条件获取特定字段值
+ * @param params 查询参数
+ * @returns 期权价格数据
+ */
+export const getOptionPriceByCondition = async (params: {
+  code?: string
+  name?: string
+  condition: string
+}) => {
+  return await request.get({
+    url: '/finance/app/excel-daily/get-by-condition',
+    params,
+    method: 'GET',
+    header: { 'tenant-id': '1' },
+    custom: { auth: false, showError: true, showLoading: false }
+  })
 } 

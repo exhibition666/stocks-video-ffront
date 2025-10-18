@@ -35,6 +35,11 @@ const videoList = ref<Video[]>([])
 // 存储每个视频的签名URL
 const videoPicUrlMap = ref<Record<number, string>>({})
 
+// 分页状态
+const currentPage = ref(1)
+const pageSize = ref(12)
+const total = ref(0)
+
 // 当前选中的分类ID，null 表示全部
 const currentCategoryId = ref<number | null>(null)
 
@@ -135,8 +140,8 @@ const getVideoList = async (categoryId?: number) => {
   errorMsg.value = ''
   try {
     const params = {
-      pageNo: 1,
-      pageSize: 24 // 增加默认显示数量
+      pageNo: currentPage.value,
+      pageSize: pageSize.value // 改为每页10条
     }
     if (categoryId) {
       params['typeId'] = categoryId
@@ -144,6 +149,7 @@ const getVideoList = async (categoryId?: number) => {
     // console.log('正在使用OSS配置ID:', OSS_CONFIG_ID)
     const res = await FrontVideoApi.getVideoList(params)
     videoList.value = res.list || []
+    total.value = res.total || res.totalCount || 0
     
     // 重置签名URL映射
     videoPicUrlMap.value = {}
@@ -199,13 +205,21 @@ const goToVipUpgrade = () => {
 const handleAllCategory = () => {
   currentCategoryId.value = null
   searchKeyword.value = '' // 切换到全部视频时清空搜索关键词
+  currentPage.value = 1
   getVideoList()
 }
 
 const handleCategoryClick = (category: VideoType) => {
   currentCategoryId.value = category.id
   searchKeyword.value = '' // 切换分类时清空搜索关键词
+  currentPage.value = 1
   getVideoList(category.id)
+}
+
+// 处理分页变化
+const handlePageChange = (page: number) => {
+  currentPage.value = page
+  getVideoList(currentCategoryId.value || undefined)
 }
 
 // 获取默认图片
@@ -215,31 +229,35 @@ const getDefaultImage = (url?: string) => {
 }
 
 // 格式化观看次数
-const formatViews = (count: number = 0) => {
-  if (count >= 1000000) {
-    return (count / 1000000).toFixed(1) + 'M 次观看'
-  } else if (count >= 1000) {
-    return (count / 1000).toFixed(1) + 'K 次观看'
+const formatViews = (count?: number) => {
+  const value = typeof count === 'number' && !isNaN(count) ? count : 0
+  if (value >= 1000000) {
+    return (value / 1000000).toFixed(1) + 'M 次观看'
+  } else if (value >= 1000) {
+    return (value / 1000).toFixed(1) + 'K 次观看'
   }
-  return count + ' 次观看'
+  return value + ' 次观看'
 }
 
-// 格式化发布时间 (随机生成，仅用于演示)
-const formatDate = () => {
-  const days = Math.floor(Math.random() * 365)
-  if (days === 0) {
-    return '今天'
-  } else if (days === 1) {
-    return '昨天'
-  } else if (days < 7) {
-    return days + ' 天前'
-  } else if (days < 30) {
-    return Math.floor(days / 7) + ' 周前'
-  } else if (days < 365) {
-    return Math.floor(days / 30) + ' 个月前'
+// 格式化上传时间（支持毫秒或秒时间戳，或可被 Date 解析的字符串）
+const formatCreateTime = (input: any) => {
+  if (!input) return ''
+  let ms: number
+  const num = Number(input)
+  if (!isNaN(num)) {
+    ms = num < 1e12 ? num * 1000 : num
   } else {
-    return Math.floor(days / 365) + ' 年前'
+    const parsed = Date.parse(input)
+    ms = isNaN(parsed) ? Date.now() : parsed
   }
+  const d = new Date(ms)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const y = d.getFullYear()
+  const m = pad(d.getMonth() + 1)
+  const day = pad(d.getDate())
+  const hh = pad(d.getHours())
+  const mm = pad(d.getMinutes())
+  return `${y}-${m}-${day} ${hh}:${mm}`
 }
 
 // 随机生成观看次数（用于演示）
@@ -381,7 +399,7 @@ onMounted(async () => {
           <h3 class="section-title">
             <i class="el-icon-video-play"></i>
             {{ currentCategoryId ? categories.find(c => c.id === currentCategoryId)?.name : '全部视频' }}
-            <span class="video-count">({{ videoList.length }} 个视频)</span>
+            <!--<span class="video-count">({{ videoList.length }} 个视频)</span>-->
           </h3>
         </div>
 
@@ -426,11 +444,11 @@ onMounted(async () => {
               <div class="video-meta">
                 <div class="meta-item">
                   <i class="el-icon-view"></i>
-                  <span>{{ formatViews(video.view || getRandomViews()) }}</span>
+                  <span>{{ formatViews(video.view) }}</span>
                 </div>
                 <div class="meta-item">
                   <i class="el-icon-time"></i>
-                  <span>{{ formatDate() }}</span>
+                  <span>{{ formatCreateTime(video.createTime) }}</span>
                 </div>
               </div>
               <div class="video-description">
@@ -439,10 +457,26 @@ onMounted(async () => {
             </div>
           </div>
         </div>
+
+        <!-- 分页组件 -->
+        <div class="pagination-container">
+          <el-pagination
+            background
+            layout="prev, pager, next"
+            :current-page="currentPage"
+            :page-size="pageSize"
+            :total="total"
+            hide-on-single-page
+            @current-change="handlePageChange"
+          />
+        </div>
       </div>
 
       <!-- 加载更多按钮已隐藏 -->
     </div>
+    
+    <!-- ICP备案信息 -->
+    <IcpFooter />
   </div>
 </template>
 
@@ -1042,6 +1076,43 @@ $header-height: 70px;
     .video-card {
       .card-content {
         padding: 16px;
+      }
+    }
+  }
+
+  // 分页美化
+  .pagination-container {
+    display: flex;
+    justify-content: center;
+    margin: 24px 0 8px;
+
+    :deep(.el-pagination.is-background) {
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+      border: 1px solid rgba(232, 234, 237, 0.7);
+
+      .btn-prev,
+      .btn-next,
+      .el-pager li {
+        border-radius: 999px;
+        transition: all 0.2s ease;
+      }
+
+      .el-pager li:not(.is-active):hover,
+      .btn-prev:not(.is-disabled):hover,
+      .btn-next:not(.is-disabled):hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(26, 115, 232, 0.12);
+      }
+
+      .el-pager li.is-active {
+        background-image: linear-gradient(135deg, #1a73e8 0%, #4285f4 50%, #34a853 100%);
+        color: #fff;
+        box-shadow: 0 6px 18px rgba(26, 115, 232, 0.25);
+        border: none;
       }
     }
   }

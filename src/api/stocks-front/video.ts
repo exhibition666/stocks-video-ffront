@@ -19,6 +19,30 @@ export const FrontVideoApi = {
       url: `/stocks-front/video/page`, 
       params: { ...params, typeId } 
     })
+  },
+
+  // 验证观看邀请码
+  validateWatchcode: async (videoId: number, watchcode: string) => {
+    return await request.post({ 
+      url: `/stocks-front/video/validate-watchcode`, 
+      data: { videoId, watchcode } 
+    })
+  },
+
+  // 查询当前用户的邀请码验证记录（分页）
+  getMyWatchcodeOrders: async (pageNo = 1, pageSize = 10) => {
+    return await request.get({ 
+      url: `/member/watchcode-order/my-page`,
+      params: { pageNo, pageSize }
+    })
+  },
+
+  // 新增：判断当前用户对指定视频是否已存在验证记录
+  getWatchcodeExists: async (videoId: number) => {
+    return await request.get({
+      url: `/member/watchcode-order/exists`,
+      params: { videoId }
+    })
   }
 }
 

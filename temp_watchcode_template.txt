@@ -1,0 +1,50 @@
+﻿                <!-- 观看码遮罩：需要邀请码且未通过验证时显示 -->
+                <div v-if="needWatchcode && !isWatchcodeVerified" class="watchcode-overlay">
+                  <div class="watchcode-card" @contextmenu.prevent>
+                    <div class="watchcode-header">
+                      <div class="watchcode-icon">
+                        <i class="el-icon-lock"></i>
+                      </div>
+                      <h3>VIP视频需要邀请码</h3>
+                      <p>此视频为VIP专属内容，请输入正确的邀请码后观看</p>
+                    </div>
+                    
+                    <div class="watchcode-form">
+                      <el-input
+                        v-model="inputWatchcode"
+                        placeholder="请输入邀请码"
+                        size="large"
+                        clearable
+                        @keyup.enter="handleSubmitWatchcode"
+                      />
+                      <div class="watchcode-actions">
+                        <el-button type="primary" size="large" @click="handleSubmitWatchcode">
+                          <i class="el-icon-unlock"></i>
+                          确认观看
+                        </el-button>
+                      </div>
+                    </div>
+                    
+                    <div class="watchcode-tips">
+                      <div class="tips-header">
+                        <i class="el-icon-info"></i>
+                        <span>邀请码获取方式</span>
+                      </div>
+                      <div class="tips-content">
+                        <div class="tip-item">
+                          <div class="tip-icon">
+                            <i class="el-icon-chat-dot-round"></i>
+                          </div>
+                          <div class="tip-text">
+                            <h4>关注公众号获取</h4>
+                            <p>扫描下方二维码关注公众号，回复"邀请码"即可获取</p>
+                          </div>
+                        </div>
+                        <div class="qr-code-container">
+                          <img src="/公众号二维码.jpg" alt="公众号二维码" class="qr-code-image" />
+                          <p class="qr-code-tip">扫码关注获取邀请码</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>

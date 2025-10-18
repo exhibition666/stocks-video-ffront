@@ -7,11 +7,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="keywords"
-      content="股票期权系统 专业的股票期权教学平台 投资教育 期权交易 股票分析"
+      content="Gthtsec 专业的股票期权教学平台 投资教育 期权交易 股票分析"
     />
     <meta
       name="description"
-      content="股票期权系统 - 专业的股票期权教学平台，提供系统化的投资教育、期权交易指导和市场分析服务"
+      content="Gthtsec - 专业的股票期权教学平台，提供系统化的投资教育、期权交易指导和市场分析服务"
     />
     <title>%VITE_APP_TITLE%</title>
   </head>
@@ -132,16 +132,92 @@
             transform: rotate(-360deg);
           }
         }
+
+        /* === Stocks rising loading animation === */
+        .stock-loading {
+          width: 80px;
+          height: 60px;
+          position: relative;
+        }
+
+        .stock-chart {
+          width: 80px;
+          height: 60px;
+          position: relative;
+        }
+
+        .stock-svg {
+          width: 100%;
+          height: 100%;
+          display: block;
+        }
+
+        .area-line {
+          stroke: #2d8cf0;
+          stroke-width: 3;
+          fill: none;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+          /* 通过描边虚线实现绘制动画 */
+          stroke-dasharray: 160;
+          stroke-dashoffset: 160;
+          animation: draw-line 1.6s ease-in-out infinite;
+        }
+        .area-fill {
+          fill: url(#areaGrad);
+        }
+        .reveal-rect {
+          animation: reveal 1.6s ease-in-out infinite;
+        }
+
+        @keyframes draw-line {
+          0% {
+            stroke-dashoffset: 160;
+            opacity: .6;
+          }
+          60% {
+            stroke-dashoffset: 0;
+            opacity: 1;
+          }
+          100% {
+            stroke-dashoffset: 0;
+            opacity: 1;
+          }
+        }
+
+        /* 面积图揭示动画（从左到右） */
+        @keyframes reveal {
+          0% { width: 0; }
+          60% { width: 80px; }
+          100% { width: 80px; }
+        }
       </style>
       <div class="app-loading">
         <div class="app-loading-wrap">
           <div class="app-loading-title">
-            <img src="/logo.gif" class="app-loading-logo" alt="Logo" />
+            <!--<img src="/logo.gif" class="app-loading-logo" alt="Logo" />-->
             <div class="app-loading-title">%VITE_APP_TITLE%</div>
           </div>
           <div class="app-loading-item">
-            <div class="app-loading-outter"></div>
-            <div class="app-loading-inner"></div>
+            <div class="stock-loading">
+              <div class="stock-chart">
+                <svg viewBox="0 0 80 60" class="stock-svg" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="#2d8cf0" stop-opacity="0.35" />
+                      <stop offset="100%" stop-color="#2d8cf0" stop-opacity="0.05" />
+                    </linearGradient>
+                    <clipPath id="revealClip">
+                      <rect class="reveal-rect" x="0" y="0" width="0" height="60"></rect>
+                    </clipPath>
+                  </defs>
+                  <!-- 面积填充（带渐变，整体上升且有波折），通过 clipPath 左到右揭示 -->
+                  <path class="area-fill" clip-path="url(#revealClip)" d="M6,58 L6,50 L16,49 L26,46 L36,43 L46,39 L56,33 L66,26 L66,58 Z"></path>
+                  <!-- 顶部折线：同步绘制动画 -->
+                  <polyline class="area-line" points="6,50 16,49 26,46 36,43 46,39 56,33 66,26"></polyline>
+                </svg>
+              </div>
+            </div>
           </div>
         </div>
       </div>

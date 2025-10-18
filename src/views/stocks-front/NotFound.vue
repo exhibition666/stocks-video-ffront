@@ -3,6 +3,9 @@
     <h1>404 - 页面未找到</h1>
     <p>您访问的页面不存在或已被删除。</p>
     <el-button type="primary" @click="goHome">返回首页</el-button>
+    
+    <!-- ICP备案信息 -->
+    <IcpFooter />
   </div>
 </template>
 

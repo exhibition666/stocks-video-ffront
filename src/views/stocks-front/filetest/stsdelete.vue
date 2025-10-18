@@ -89,3 +89,6 @@ const handleDelete = async () => {
   margin-top: 4px;
 }
 </style>
+
+<!-- ICP备案信息 -->
+<IcpFooter />
